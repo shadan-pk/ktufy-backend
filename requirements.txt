@@ -7,7 +7,6 @@ pydantic-settings==2.1.0
 
 # Supabase integration
 supabase==2.3.0
-gotrue==2.3.0
 
 # Database and ORM
 sqlalchemy==2.0.23
@@ -18,12 +17,8 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 
-# HTTP and async support
-httpx==0.25.2
+# Async support
 aiofiles==23.2.1
-
-# CORS middleware
-python-cors==1.0.0
 
 # Data validation
 email-validator==2.1.0
