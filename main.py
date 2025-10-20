@@ -7,6 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 
+# Import routers
+from routers import auth as auth_router
+
 # Load environment variables
 load_dotenv()
 
@@ -18,6 +21,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Include routers
+app.include_router(auth_router.router)
 
 # Configure CORS
 app.add_middleware(
@@ -54,9 +60,10 @@ async def health_check():
         "environment": os.getenv("ENVIRONMENT", "development"),
         "services": {
             "api": "operational",
-            "database": "not_configured",  # Will update in Phase 3
-            "vector_db": "not_configured",  # Will update in Phase 5
-            "storage": "not_configured"     # Will update in Phase 3
+            "authentication": "operational",  # Phase 2 complete!
+            "database": "not_configured",     # Will update in Phase 3
+            "vector_db": "not_configured",    # Will update in Phase 5
+            "storage": "not_configured"       # Will update in Phase 3
         }
     }
 
@@ -71,7 +78,7 @@ async def api_status():
         "api_version": "v1",
         "status": "active",
         "features": {
-            "authentication": "pending",
+            "authentication": "operational",      # ✅ Phase 2 complete
             "notes_upload": "pending",
             "kg_rag": "pending",
             "content_generation": "pending",

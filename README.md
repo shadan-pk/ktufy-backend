@@ -70,9 +70,9 @@ ktufy-backend/
 
 This project follows a structured development roadmap:
 
-- **Phase 1**: Environment Setup (Current) ✅
-- **Phase 2**: Authentication Integration
-- **Phase 3**: Database Schema Design
+- **Phase 1**: Environment Setup ✅ **COMPLETE**
+- **Phase 2**: Authentication Integration ✅ **COMPLETE**
+- **Phase 3**: Database Schema Design (Next)
 - **Phase 4**: Basic API Structure
 - **Phase 5**: AI/ML Foundation
 - **Phase 6**: KG-RAG Implementation
@@ -97,13 +97,21 @@ See `ktufy_backend_guide.md` for detailed implementation guide.
 
 ## 📝 API Endpoints
 
-### Current Endpoints (Phase 1)
+### General Endpoints
 - `GET /` - Root endpoint
 - `GET /health` - Health check
 - `GET /api/v1/status` - API status
 
+### Authentication Endpoints (Phase 2) ✅
+- `GET /api/v1/auth/me` - Get current user profile 🔒
+- `GET /api/v1/auth/status` - Check authentication status
+- `POST /api/v1/auth/verify-token` - Verify JWT token
+- `GET /api/v1/auth/protected-example` - Protected demo 🔒
+- `GET /api/v1/auth/public-example` - Public demo
+
+🔒 = Requires Bearer token
+
 ### Upcoming Endpoints
-- `/api/v1/auth` - Authentication
 - `/api/v1/notes` - Notes management
 - `/api/v1/ai/chat` - KG-RAG chatbot
 - `/api/v1/ai/generate` - Content generation

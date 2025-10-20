@@ -6,7 +6,7 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 
 # Supabase integration
-supabase==2.3.0
+supabase>=2.9.0
 
 # Database and ORM
 sqlalchemy==2.0.23
