@@ -111,3 +111,53 @@ class AuthStatusResponse(BaseModel):
                 "message": "User is authenticated"
             }
         }
+
+
+class UserUpdateRequest(BaseModel):
+    """
+    Request schema for updating user profile
+    """
+    email: Optional[EmailStr] = Field(None, description="New email address")
+    metadata: Optional[dict] = Field(None, description="User metadata to update")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "newemail@ktu.edu.in",
+                "metadata": {
+                    "full_name": "John Updated Doe",
+                    "semester": 5,
+                    "branch": "CSE"
+                }
+            }
+        }
+
+
+class ChangePasswordRequest(BaseModel):
+    """
+    Request schema for changing password
+    """
+    new_password: str = Field(..., min_length=8, description="New password (minimum 8 characters)")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "new_password": "newSecurePassword123!"
+            }
+        }
+
+
+class MessageResponse(BaseModel):
+    """
+    Generic message response
+    """
+    message: str
+    success: bool = True
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Operation completed successfully",
+                "success": True
+            }
+        }

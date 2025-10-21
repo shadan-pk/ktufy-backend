@@ -11,8 +11,12 @@ from schemas.user import (
     UserProfile, 
     TokenVerifyRequest, 
     TokenVerifyResponse,
-    AuthStatusResponse
+    AuthStatusResponse,
+    UserUpdateRequest,
+    ChangePasswordRequest,
+    MessageResponse
 )
+from utils.supabase_client import supabase_client, supabase_admin_client
 
 router = APIRouter(
     prefix="/api/v1/auth",
@@ -38,6 +42,110 @@ async def get_current_user_profile(
         role=current_user.role,
         metadata=current_user.metadata
     )
+
+
+@router.put("/me", response_model=UserProfile)
+async def update_user_profile(
+    update_data: UserUpdateRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Update the current authenticated user's profile
+    
+    **Requires authentication**: Bearer token in Authorization header
+    
+    Args:
+        update_data: User update data (email and/or metadata)
+        
+    Returns:
+        UserProfile: The updated user profile
+    """
+    try:
+        # Prepare update data for Supabase
+        update_dict = {}
+        
+        if update_data.email is not None:
+            update_dict["email"] = update_data.email
+            
+        if update_data.metadata is not None:
+            update_dict["data"] = update_data.metadata
+        
+        if not update_dict:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No update data provided"
+            )
+        
+        # Update user using admin client to bypass RLS
+        response = supabase_admin_client.auth.admin.update_user_by_id(
+            uid=current_user.user_id,
+            attributes=update_dict
+        )
+        
+        if not response or not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update user profile"
+            )
+        
+        # Return updated profile
+        return UserProfile(
+            user_id=response.user.id,
+            email=response.user.email,
+            role=response.user.role or "authenticated",
+            metadata=response.user.user_metadata or {}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating profile: {str(e)}"
+        )
+
+
+@router.post("/change-password", response_model=MessageResponse)
+async def change_password(
+    password_data: ChangePasswordRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Change the current authenticated user's password
+    
+    **Requires authentication**: Bearer token in Authorization header
+    
+    Args:
+        password_data: New password data
+        
+    Returns:
+        MessageResponse: Success message
+    """
+    try:
+        # Update user password using admin client
+        response = supabase_admin_client.auth.admin.update_user_by_id(
+            uid=current_user.user_id,
+            attributes={"password": password_data.new_password}
+        )
+        
+        if not response or not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to change password"
+            )
+        
+        return MessageResponse(
+            message="Password changed successfully",
+            success=True
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error changing password: {str(e)}"
+        )
 
 
 @router.get("/status", response_model=AuthStatusResponse)
@@ -101,6 +209,93 @@ async def verify_token(request: TokenVerifyRequest):
             user_id=None,
             email=None,
             message=e.detail
+        )
+
+
+@router.post("/verify-email", response_model=MessageResponse)
+async def send_verification_email(
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Send email verification to the current user
+    
+    **Requires authentication**: Bearer token in Authorization header
+    
+    Returns:
+        MessageResponse: Success message
+    """
+    try:
+        # Check if email is already verified
+        user_response = supabase_admin_client.auth.admin.get_user_by_id(current_user.user_id)
+        
+        if user_response and user_response.user:
+            if user_response.user.email_confirmed_at:
+                return MessageResponse(
+                    message="Email is already verified",
+                    success=True
+                )
+        
+        # Resend verification email using Supabase
+        # Note: Supabase will send the verification email automatically
+        # We can use the resend method or regenerate the confirmation
+        response = supabase_admin_client.auth.admin.generate_link(
+            type="signup",
+            email=current_user.email,
+            options={"redirect_to": "your-app-redirect-url"}  # Configure this based on your needs
+        )
+        
+        return MessageResponse(
+            message="Verification email sent successfully",
+            success=True
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error sending verification email: {str(e)}"
+        )
+
+
+@router.delete("/users/{user_id}", response_model=MessageResponse)
+async def delete_user_account(
+    user_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Delete a user account
+    
+    **Requires authentication**: Bearer token in Authorization header
+    
+    Users can only delete their own account unless they have admin privileges.
+    
+    Args:
+        user_id: The ID of the user to delete
+        
+    Returns:
+        MessageResponse: Success message
+    """
+    try:
+        # Check if user is trying to delete their own account
+        if current_user.user_id != user_id and current_user.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete your own account"
+            )
+        
+        # Delete user using admin client
+        supabase_admin_client.auth.admin.delete_user(user_id)
+        
+        return MessageResponse(
+            message="User account deleted successfully",
+            success=True
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting user account: {str(e)}"
         )
 
 
