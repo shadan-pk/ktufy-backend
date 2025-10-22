@@ -60,18 +60,28 @@ Documentation/
 ### **Endpoints Available**
 ```
 General:
-  GET  /                              ✅ Welcome
-  GET  /health                        ✅ Health check
-  GET  /api/v1/status                 ✅ API status
+  GET  /                                    ✅ Welcome
+  GET  /health                              ✅ Health check
+  GET  /api/v1/status                       ✅ API status
 
 Authentication:
-  GET  /api/v1/auth/me                ✅ User profile 🔒
-  GET  /api/v1/auth/status            ✅ Auth status
-  POST /api/v1/auth/verify-token      ✅ Verify token
-  GET  /api/v1/auth/protected-example ✅ Protected demo 🔒
-  GET  /api/v1/auth/public-example    ✅ Public demo
+  GET  /api/v1/auth/me                      ✅ Get user profile 🔒
+  PUT  /api/v1/auth/me                      ✅ Update user profile 🔒
+  POST /api/v1/auth/request-password-reset  ✅ Request password reset
+  POST /api/v1/auth/verify-email            ✅ Send verification email 🔒
+  DELETE /api/v1/auth/users/{user_id}       ✅ Delete user account 🔒
+  GET  /api/v1/auth/status                  ✅ Auth status
+  POST /api/v1/auth/verify-token            ✅ Verify token
+
+Chatbot (Ready to Implement):
+  POST   /api/v1/chat/sessions              ⏳ Create chat session
+  GET    /api/v1/chat/sessions              ⏳ Get all sessions
+  GET    /api/v1/chat/sessions/{id}         ⏳ Get session with messages
+  POST   /api/v1/chat/message               ⏳ Send message & get AI response
+  DELETE /api/v1/chat/sessions/{id}         ⏳ Delete session
 
 🔒 = Requires Bearer token
+⏳ = Ready to implement (guides available)
 ```
 
 ---
