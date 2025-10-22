@@ -4,6 +4,7 @@ Handles authentication-related endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Optional
+from pydantic import EmailStr
 
 from app.auth import get_current_user, get_optional_user, AuthenticatedUser, verify_supabase_token
 from schemas.user import (
@@ -13,7 +14,6 @@ from schemas.user import (
     TokenVerifyResponse,
     AuthStatusResponse,
     UserUpdateRequest,
-    ChangePasswordRequest,
     MessageResponse
 )
 from utils.supabase_client import supabase_client, supabase_admin_client
@@ -33,15 +33,40 @@ async def get_current_user_profile(
     
     **Requires authentication**: Bearer token in Authorization header
     
+    Fetches user data from both auth.users and public.users tables.
+    
     Returns:
         UserProfile: The authenticated user's profile information
     """
-    return UserProfile(
-        user_id=current_user.user_id,
-        email=current_user.email,
-        role=current_user.role,
-        metadata=current_user.metadata
-    )
+    try:
+        # Fetch user data from public.users table
+        response = supabase_client.table("users").select("*").eq("id", current_user.user_id).execute()
+        
+        if response.data and len(response.data) > 0:
+            user_data = response.data[0]
+            # Merge with auth user data
+            return UserProfile(
+                user_id=current_user.user_id,
+                email=current_user.email,
+                role=current_user.role,
+                metadata=user_data  # Include all fields from public.users
+            )
+        
+        # Fallback if no record in public.users
+        return UserProfile(
+            user_id=current_user.user_id,
+            email=current_user.email,
+            role=current_user.role,
+            metadata=current_user.metadata
+        )
+    except Exception as e:
+        # Fallback to auth data only
+        return UserProfile(
+            user_id=current_user.user_id,
+            email=current_user.email,
+            role=current_user.role,
+            metadata=current_user.metadata
+        )
 
 
 @router.put("/me", response_model=UserProfile)
@@ -54,46 +79,80 @@ async def update_user_profile(
     
     **Requires authentication**: Bearer token in Authorization header
     
+    Updates both auth.users (email) and public.users (profile data) tables.
+    
     Args:
-        update_data: User update data (email and/or metadata)
+        update_data: User update data (email and/or profile fields)
         
     Returns:
         UserProfile: The updated user profile
     """
     try:
-        # Prepare update data for Supabase
-        update_dict = {}
+        # Prepare data for public.users table
+        users_table_data = {}
         
-        if update_data.email is not None:
-            update_dict["email"] = update_data.email
-            
+        if update_data.name is not None:
+            users_table_data["name"] = update_data.name
+        if update_data.registration_number is not None:
+            users_table_data["registration_number"] = update_data.registration_number
+        if update_data.college is not None:
+            users_table_data["college"] = update_data.college
+        if update_data.branch is not None:
+            users_table_data["branch"] = update_data.branch
+        if update_data.year_joined is not None:
+            users_table_data["year_joined"] = update_data.year_joined
+        if update_data.year_ending is not None:
+            users_table_data["year_ending"] = update_data.year_ending
+        if update_data.roll_number is not None:
+            users_table_data["roll_number"] = update_data.roll_number
         if update_data.metadata is not None:
-            update_dict["data"] = update_data.metadata
+            users_table_data["metadata"] = update_data.metadata
         
-        if not update_dict:
+        # Update email in auth.users if provided
+        if update_data.email is not None:
+            users_table_data["email"] = update_data.email
+            # Update email in auth.users using admin client
+            supabase_admin_client.auth.admin.update_user_by_id(
+                uid=current_user.user_id,
+                attributes={"email": update_data.email}
+            )
+        
+        if not users_table_data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No update data provided"
             )
         
-        # Update user using admin client to bypass RLS
-        response = supabase_admin_client.auth.admin.update_user_by_id(
-            uid=current_user.user_id,
-            attributes=update_dict
-        )
+        # Use UPSERT to handle both update and insert cases
+        # Include user ID and email in the data
+        upsert_data = {
+            "id": current_user.user_id,
+            "email": users_table_data.get("email", current_user.email),
+            **users_table_data
+        }
         
-        if not response or not response.user:
+        # Upsert into public.users table (creates if doesn't exist, updates if exists)
+        # response = supabase_client.table("users").upsert(
+        response = supabase_admin_client.table("users").upsert(
+            upsert_data,
+            on_conflict="id"
+        ).execute()
+        
+        if not response.data:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to update user profile"
             )
         
+        # Get updated user data from auth
+        auth_response = supabase_admin_client.auth.admin.get_user_by_id(current_user.user_id)
+        
         # Return updated profile
         return UserProfile(
-            user_id=response.user.id,
-            email=response.user.email,
-            role=response.user.role or "authenticated",
-            metadata=response.user.user_metadata or {}
+            user_id=current_user.user_id,
+            email=auth_response.user.email if auth_response and auth_response.user else current_user.email,
+            role=current_user.role,
+            metadata=response.data[0] if response.data else {}
         )
         
     except HTTPException:
@@ -103,48 +162,40 @@ async def update_user_profile(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error updating profile: {str(e)}"
         )
-
-
-@router.post("/change-password", response_model=MessageResponse)
-async def change_password(
-    password_data: ChangePasswordRequest,
-    current_user: AuthenticatedUser = Depends(get_current_user)
+    
+@router.post("/request-password-reset", response_model=MessageResponse)
+async def request_password_reset(
+    email: EmailStr
 ):
     """
-    Change the current authenticated user's password
+    Request a password reset email (public endpoint)
     
-    **Requires authentication**: Bearer token in Authorization header
+    **No authentication required**
+    
+    Sends a password reset link to the user's email via Supabase.
+    Use this instead of a custom change-password endpoint.
     
     Args:
-        password_data: New password data
+        email: Email address to send reset link to
         
     Returns:
-        MessageResponse: Success message
+        MessageResponse: Success message (always returns success for security)
     """
     try:
-        # Update user password using admin client
-        response = supabase_admin_client.auth.admin.update_user_by_id(
-            uid=current_user.user_id,
-            attributes={"password": password_data.new_password}
-        )
+        # Use Supabase password reset functionality
+        supabase_client.auth.reset_password_email(email)
         
-        if not response or not response.user:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to change password"
-            )
-        
+        # Always return success (don't reveal if email exists)
         return MessageResponse(
-            message="Password changed successfully",
+            message="If the email exists, a password reset link has been sent",
             success=True
         )
         
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error changing password: {str(e)}"
+        # Still return success for security (don't reveal if email exists)
+        return MessageResponse(
+            message="If the email exists, a password reset link has been sent",
+            success=True
         )
 
 

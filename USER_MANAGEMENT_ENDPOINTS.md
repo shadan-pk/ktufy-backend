@@ -1,7 +1,9 @@
 # User Management Endpoints Documentation
 
 ## Overview
-These endpoints allow users to manage their profiles, change passwords, verify emails, and delete accounts.
+These endpoints allow users to manage their profiles, request password resets, verify emails, and delete accounts.
+
+**Important**: All profile data is stored in the `public.users` table, while authentication data (email, password) is managed by Supabase in the `auth.users` table.
 
 ## Base URL
 ```
@@ -10,12 +12,33 @@ http://localhost:8000/api/v1/auth
 
 ---
 
+## Database Structure
+
+### public.users Table
+Stores user profile information:
+- `id` (uuid) - User ID from auth.users
+- `name` - Full name
+- `email` - Email address (synced with auth.users)
+- `registration_number` - University registration number
+- `college` - College name
+- `branch` - Branch/Department
+- `year_joined` - Year of joining
+- `year_ending` - Year of completion
+- `roll_number` - Roll number
+- `metadata` (jsonb) - Additional metadata
+- `created_at` - Timestamp
+
+### auth.users Table
+Managed by Supabase for authentication (email, password, etc.)
+
+---
+
 ## Endpoints
 
 ### 1. ✅ GET /api/v1/auth/me
 **Get Current User Profile**
 
-Get the authenticated user's profile information.
+Get the authenticated user's profile information from public.users table.
 
 **Authentication Required**: Yes (Bearer token)
 
@@ -32,11 +55,21 @@ curl -X GET "http://localhost:8000/api/v1/auth/me" \
   "email": "student@ktu.edu.in",
   "role": "authenticated",
   "metadata": {
-    "full_name": "John Doe",
-    "semester": 4,
-    "branch": "CSE"
-  },
-  "created_at": "2025-10-20T10:30:00Z"
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "John Doe",
+    "email": "student@ktu.edu.in",
+    "registration_number": "KTU123456",
+    "college": "College of Engineering Trivandrum",
+    "branch": "Computer Science",
+    "year_joined": 2021,
+    "year_ending": 2025,
+    "roll_number": "CSE21001",
+    "metadata": {
+      "phone": "+91-1234567890",
+      "semester": 5
+    },
+    "created_at": "2025-10-20T10:30:00Z"
+  }
 }
 ```
 
@@ -45,19 +78,24 @@ curl -X GET "http://localhost:8000/api/v1/auth/me" \
 ### 2. ✨ PUT /api/v1/auth/me
 **Update User Profile**
 
-Update the authenticated user's email and/or metadata.
+Update the authenticated user's profile in the public.users table and optionally email in auth.users.
 
 **Authentication Required**: Yes (Bearer token)
 
-**Request Body:**
+**Request Body (all fields optional):**
 ```json
 {
-  "email": "newemail@ktu.edu.in",  // Optional
-  "metadata": {                     // Optional
-    "full_name": "Updated Name",
-    "semester": 5,
-    "branch": "CSE",
-    "phone": "+91-1234567890"
+  "email": "newemail@ktu.edu.in",         // Updates both tables
+  "name": "Updated Name",                  // public.users
+  "registration_number": "KTU123456",      // public.users
+  "college": "College of Engineering",     // public.users
+  "branch": "Computer Science",            // public.users
+  "year_joined": 2021,                     // public.users
+  "year_ending": 2025,                     // public.users
+  "roll_number": "CSE21001",              // public.users
+  "metadata": {                            // public.users JSONB
+    "phone": "+91-1234567890",
+    "semester": 5
   }
 }
 ```
@@ -68,10 +106,12 @@ curl -X PUT "http://localhost:8000/api/v1/auth/me" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
+    "name": "Updated Name",
+    "branch": "Computer Science",
+    "year_joined": 2021,
     "metadata": {
-      "full_name": "Updated Name",
-      "semester": 5,
-      "branch": "CSE"
+      "phone": "+91-1234567890",
+      "semester": 5
     }
   }'
 ```
@@ -80,15 +120,23 @@ curl -X PUT "http://localhost:8000/api/v1/auth/me" \
 ```json
 {
   "user_id": "123e4567-e89b-12d3-a456-426614174000",
-  "email": "newemail@ktu.edu.in",
+  "email": "student@ktu.edu.in",
   "role": "authenticated",
   "metadata": {
-    "full_name": "Updated Name",
-    "semester": 5,
-    "branch": "CSE",
-    "phone": "+91-1234567890"
-  },
-  "created_at": "2025-10-20T10:30:00Z"
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "Updated Name",
+    "email": "student@ktu.edu.in",
+    "registration_number": "KTU123456",
+    "college": "College of Engineering Trivandrum",
+    "branch": "Computer Science",
+    "year_joined": 2021,
+    "year_ending": 2025,
+    "roll_number": "CSE21001",
+    "metadata": {
+      "phone": "+91-1234567890",
+      "semester": 5
+    }
+  }
 }
 ```
 
@@ -101,53 +149,38 @@ curl -X PUT "http://localhost:8000/api/v1/auth/me" \
 
 ---
 
-### 3. 🔐 POST /api/v1/auth/change-password
-**Change Password**
+### 3. 🔐 POST /api/v1/auth/request-password-reset
+**Request Password Reset**
 
-Change the authenticated user's password.
+Request a password reset email via Supabase (uses Supabase's built-in password reset).
 
-**Authentication Required**: Yes (Bearer token)
+**No authentication required** (public endpoint)
 
 **Request Body:**
 ```json
 {
-  "new_password": "NewSecurePassword123!"
+  "email": "student@ktu.edu.in"
 }
 ```
 
 **Request:**
 ```bash
-curl -X POST "http://localhost:8000/api/v1/auth/change-password" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+curl -X POST "http://localhost:8000/api/v1/auth/request-password-reset" \
   -H "Content-Type: application/json" \
   -d '{
-    "new_password": "NewSecurePassword123!"
+    "email": "student@ktu.edu.in"
   }'
 ```
 
 **Response (200 OK):**
 ```json
 {
-  "message": "Password changed successfully",
+  "message": "If the email exists, a password reset link has been sent",
   "success": true
 }
 ```
 
-**Validation:**
-- Password must be at least 8 characters long
-
-**Error (422 Unprocessable Entity):**
-```json
-{
-  "detail": [
-    {
-      "loc": ["body", "new_password"],
-      "msg": "ensure this value has at least 8 characters",
-      "type": "value_error.any_str.min_length"
-    }
-  ]
-}
-```
+**Note**: For security, this endpoint always returns success, even if the email doesn't exist. This prevents email enumeration attacks.
 
 ---
 
@@ -310,7 +343,7 @@ Authorization: Bearer <your-jwt-token>
 import { supabase } from './supabaseClient';
 import api from './utils/api';
 
-async function updateUserProfile(metadata: any) {
+async function updateUserProfile(profileData: any) {
   try {
     // Get current session
     const { data: { session } } = await supabase.auth.getSession();
@@ -319,10 +352,8 @@ async function updateUserProfile(metadata: any) {
       throw new Error('Not authenticated');
     }
 
-    // Call backend endpoint
-    const response = await api.put('/auth/me', {
-      metadata: metadata
-    }, {
+    // Call backend endpoint to update public.users table
+    const response = await api.put('/auth/me', profileData, {
       headers: {
         'Authorization': `Bearer ${session.access_token}`
       }
@@ -336,38 +367,52 @@ async function updateUserProfile(metadata: any) {
   }
 }
 
-// Usage
+// Usage - Update any combination of fields
 updateUserProfile({
-  full_name: 'John Doe',
-  semester: 5,
-  branch: 'CSE'
+  name: 'John Doe',
+  registration_number: 'KTU123456',
+  college: 'College of Engineering Trivandrum',
+  branch: 'Computer Science',
+  year_joined: 2021,
+  year_ending: 2025,
+  roll_number: 'CSE21001',
+  metadata: {
+    phone: '+91-1234567890',
+    semester: 5
+  }
 });
 ```
 
-### Example: Change Password
+### Example: Request Password Reset
 
 ```typescript
-async function changePassword(newPassword: string) {
+async function requestPasswordReset(email: string) {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      throw new Error('Not authenticated');
-    }
-
-    const response = await api.post('/auth/change-password', {
-      new_password: newPassword
-    }, {
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`
-      }
+    // Public endpoint - no authentication needed
+    const response = await api.post('/auth/request-password-reset', {
+      email: email
     });
 
-    console.log('Password changed:', response.data);
+    console.log('Password reset requested:', response.data);
+    Alert.alert('Success', 'Password reset link sent to your email');
     return response.data;
   } catch (error) {
-    console.error('Error changing password:', error);
+    console.error('Error requesting password reset:', error);
+    Alert.alert('Error', 'Failed to send password reset email');
     throw error;
+  }
+}
+
+// Or use Supabase directly (recommended)
+async function requestPasswordResetSupabase(email: string) {
+  try {
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'yourapp://reset-password'
+    });
+    Alert.alert('Success', 'Password reset link sent to your email');
+  } catch (error) {
+    console.error('Error:', error);
+    Alert.alert('Error', 'Failed to send password reset email');
   }
 }
 ```
@@ -495,12 +540,30 @@ async function deleteAccount(userId: string) {
 
 | Endpoint | Method | Auth Required | Description |
 |----------|--------|---------------|-------------|
-| `/api/v1/auth/me` | GET | ✅ | Get current user profile |
-| `/api/v1/auth/me` | PUT | ✅ | Update user profile |
-| `/api/v1/auth/change-password` | POST | ✅ | Change password |
+| `/api/v1/auth/me` | GET | ✅ | Get current user profile from public.users |
+| `/api/v1/auth/me` | PUT | ✅ | Update user profile in public.users |
+| `/api/v1/auth/request-password-reset` | POST | ❌ | Request password reset via Supabase |
 | `/api/v1/auth/verify-email` | POST | ✅ | Send verification email |
 | `/api/v1/auth/users/{user_id}` | DELETE | ✅ | Delete user account |
 
 ---
 
-**Status:** ✅ All endpoints implemented and ready for testing!
+## Key Changes from Original Plan
+
+1. **✅ Password Management**: Using Supabase's built-in password reset instead of custom change-password endpoint
+   - More secure (uses email verification)
+   - Follows best practices
+   - Prevents unauthorized password changes
+
+2. **✅ Database Integration**: Endpoints now update `public.users` table
+   - All profile fields (name, registration_number, college, branch, etc.)
+   - Structured data in PostgreSQL
+   - JSONB metadata for flexible additional fields
+
+3. **✅ Email Updates**: Email changes update both `auth.users` and `public.users`
+   - Keeps tables in sync
+   - Supabase may require email confirmation
+
+---
+
+**Status:** ✅ All endpoints implemented with proper database integration!

@@ -116,33 +116,36 @@ class AuthStatusResponse(BaseModel):
 class UserUpdateRequest(BaseModel):
     """
     Request schema for updating user profile
+    All fields are optional - only provided fields will be updated
     """
-    email: Optional[EmailStr] = Field(None, description="New email address")
-    metadata: Optional[dict] = Field(None, description="User metadata to update")
+    # Auth fields
+    email: Optional[EmailStr] = Field(None, description="Email address")
+    
+    # Public users table fields
+    name: Optional[str] = Field(None, description="Full name")
+    registration_number: Optional[str] = Field(None, description="University registration number")
+    college: Optional[str] = Field(None, description="College name")
+    branch: Optional[str] = Field(None, description="Branch/Department")
+    year_joined: Optional[int] = Field(None, description="Year of joining", ge=2000, le=2100)
+    year_ending: Optional[int] = Field(None, description="Year of completion", ge=2000, le=2100)
+    roll_number: Optional[str] = Field(None, description="Roll number")
+    metadata: Optional[dict] = Field(None, description="Additional metadata (JSONB)")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "email": "newemail@ktu.edu.in",
+                "name": "John Doe",
+                "email": "john@ktu.edu.in",
+                "registration_number": "KTU123456",
+                "college": "College of Engineering Trivandrum",
+                "branch": "Computer Science",
+                "year_joined": 2021,
+                "year_ending": 2025,
+                "roll_number": "CSE21001",
                 "metadata": {
-                    "full_name": "John Updated Doe",
-                    "semester": 5,
-                    "branch": "CSE"
+                    "phone": "+91-1234567890",
+                    "semester": 5
                 }
-            }
-        }
-
-
-class ChangePasswordRequest(BaseModel):
-    """
-    Request schema for changing password
-    """
-    new_password: str = Field(..., min_length=8, description="New password (minimum 8 characters)")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "new_password": "newSecurePassword123!"
             }
         }
 
