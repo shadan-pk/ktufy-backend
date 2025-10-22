@@ -9,6 +9,7 @@ import os
 
 # Import routers
 from routers import auth as auth_router
+from routers import chat as chat_router
 
 # Load environment variables
 load_dotenv()
@@ -24,6 +25,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(auth_router.router)
+app.include_router(chat_router.router)
 
 # Configure CORS
 app.add_middleware(
