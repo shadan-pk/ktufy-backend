@@ -340,13 +340,33 @@ class Neo4jService:
         if not self.driver:
             raise ConnectionError("Neo4j not connected")
         
-        # Search across Topic, Module, and Subject nodes
+        # Extract meaningful keywords from the query
+        stop_words = {'explain', 'what', 'is', 'are', 'the', 'a', 'an', 'of', 'in', 'to', 'for', 'how', 'why', 'can', 'you', 'me', 'about', 'ktu', 'tell'}
+        words = query.lower().split()
+        keywords = [w for w in words if w not in stop_words and len(w) > 2]
+        
+        print(f"      🔎 Neo4j searching for keywords: {keywords}")
+        
+        # First check if we have any data at all
+        with self.driver.session() as session:
+            count_result = session.run("""
+                MATCH (t:Topic) WITH count(t) as topics
+                MATCH (m:Module) WITH topics, count(m) as modules  
+                MATCH (s:Subject) WITH topics, modules, count(s) as subjects
+                RETURN topics, modules, subjects
+            """)
+            counts = count_result.single()
+            if counts:
+                print(f"      📊 Neo4j data: {counts['topics']} topics, {counts['modules']} modules, {counts['subjects']} subjects")
+        
+        # Search across Topic, Module, and Subject nodes using keywords
+        # Match if ANY keyword is found in the name/description
         cypher = """
-        // Search Topics
+        // Search Topics - match any keyword
         OPTIONAL MATCH (t:Topic)
-        WHERE toLower(t.name) CONTAINS toLower($search_term)
-           OR any(k IN t.keywords WHERE toLower(k) CONTAINS toLower($search_term))
-        WITH collect({
+        WHERE any(kw IN $keywords WHERE toLower(t.name) CONTAINS kw)
+           OR any(kw IN $keywords WHERE any(k IN t.keywords WHERE toLower(k) CONTAINS kw))
+        WITH collect(DISTINCT {
             canonical_id: t.id,
             name: t.name,
             type: 'Topic',
@@ -354,11 +374,12 @@ class Neo4jService:
             keywords: t.keywords
         }) as topics
         
-        // Search Modules
+        // Search Modules - match any keyword or module number
         OPTIONAL MATCH (m:Module)
-        WHERE toLower(m.name) CONTAINS toLower($search_term)
-           OR toLower(m.description) CONTAINS toLower($search_term)
-        WITH topics, collect({
+        WHERE any(kw IN $keywords WHERE toLower(m.name) CONTAINS kw)
+           OR any(kw IN $keywords WHERE toLower(coalesce(m.description, '')) CONTAINS kw)
+           OR any(kw IN $keywords WHERE kw =~ '\\\\d+' AND m.number = toInteger(kw))
+        WITH topics, collect(DISTINCT {
             canonical_id: m.id,
             name: m.name,
             type: 'Module',
@@ -366,11 +387,11 @@ class Neo4jService:
             keywords: []
         }) as modules
         
-        // Search Subjects
+        // Search Subjects - match any keyword
         OPTIONAL MATCH (s:Subject)
-        WHERE toLower(s.name) CONTAINS toLower($search_term)
-           OR toLower(s.code) CONTAINS toLower($search_term)
-        WITH topics, modules, collect({
+        WHERE any(kw IN $keywords WHERE toLower(s.name) CONTAINS kw)
+           OR any(kw IN $keywords WHERE toLower(s.code) CONTAINS kw)
+        WITH topics, modules, collect(DISTINCT {
             canonical_id: s.code,
             name: s.name,
             type: 'Subject',
@@ -383,11 +404,12 @@ class Neo4jService:
         """
         
         with self.driver.session() as session:
-            result = session.run(cypher, search_term=query)
+            result = session.run(cypher, keywords=keywords)
             record = result.single()
             if record:
                 # Filter out null results and limit
                 results = [r for r in record["results"] if r.get("canonical_id")]
+                print(f"      ✅ Found {len(results)} concepts")
                 return results[:limit]
             return []
     

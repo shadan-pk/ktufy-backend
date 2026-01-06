@@ -77,46 +77,65 @@ class ChatService:
                 "type": query_type.value,
                 "metadata": metadata
             }
+            print(f"   📍 Query routing: {query_type.value}")
             
             # Fetch from Knowledge Graph
             if query_type in [QueryType.KG_ONLY, QueryType.KG_THEN_VECTOR, QueryType.HYBRID]:
-                if neo4j_service.is_connected():
-                    # Search for relevant concepts
-                    kg_results = neo4j_service.search_concepts(query, limit=5)
-                    
-                    # For each concept, get additional context
-                    for concept in kg_results[:3]:
-                        concept_id = concept.get("canonical_id")
-                        concept_type = concept.get("type", "Topic")
+                neo4j_connected = neo4j_service.is_connected()
+                print(f"   📍 Neo4j connected: {neo4j_connected}")
+                if neo4j_connected:
+                    try:
+                        # Search for relevant concepts
+                        kg_results = neo4j_service.search_concepts(query, limit=5)
+                        print(f"   📍 KG search returned: {len(kg_results)} results")
                         
-                        if concept_id:
-                            # Get prerequisites based on concept type
-                            if concept_type == "Topic":
-                                prereqs = neo4j_service.get_topic_prerequisites(concept_id)
-                            elif concept_type == "Subject":
-                                prereqs = neo4j_service.get_prerequisites(concept_id)
-                            else:
-                                prereqs = []
-                            concept["prerequisites"] = prereqs[:3] if prereqs else []
+                        # For each concept, get additional context
+                        for concept in kg_results[:3]:
+                            concept_id = concept.get("canonical_id")
+                            concept_type = concept.get("type", "Topic")
                             
-                            # Get related concepts
-                            relationships = neo4j_service.get_concept_relationships(concept_id)
-                            concept["relationships"] = relationships[:5] if relationships else []
-                    
-                    context["kg_results"] = kg_results
+                            if concept_id:
+                                # Get prerequisites based on concept type
+                                if concept_type == "Topic":
+                                    prereqs = neo4j_service.get_topic_prerequisites(concept_id)
+                                elif concept_type == "Subject":
+                                    prereqs = neo4j_service.get_prerequisites(concept_id)
+                                else:
+                                    prereqs = []
+                                concept["prerequisites"] = prereqs[:3] if prereqs else []
+                                
+                                # Get related concepts
+                                relationships = neo4j_service.get_concept_relationships(concept_id)
+                                concept["relationships"] = relationships[:5] if relationships else []
+                        
+                        context["kg_results"] = kg_results
+                    except Exception as kg_error:
+                        print(f"   ❌ KG search error: {kg_error}")
+                else:
+                    print("   ⚠️ Neo4j not connected, skipping KG search")
             
-            # Fetch from Vector Store
-            if query_type in [QueryType.VECTOR_ONLY, QueryType.VECTOR_THEN_KG, QueryType.HYBRID]:
-                if embedding_service.is_ready() and supabase_admin_client:
-                    vector_results = embedding_service.search_similar(
-                        supabase_client=supabase_admin_client,
-                        query=query,
-                        limit=5,
-                        semester=semester,
-                        branch=branch,
-                        subject_code=subject_code
-                    )
-                    context["vector_results"] = vector_results
+            # Fetch from Vector Store (also try vector if KG returned nothing)
+            should_try_vector = query_type in [QueryType.VECTOR_ONLY, QueryType.VECTOR_THEN_KG, QueryType.HYBRID, QueryType.KG_THEN_VECTOR]
+            if should_try_vector:
+                embedding_ready = embedding_service.is_ready()
+                supabase_ready = supabase_admin_client is not None
+                print(f"   📍 Embedding ready: {embedding_ready}, Supabase ready: {supabase_ready}")
+                if embedding_ready and supabase_ready:
+                    try:
+                        vector_results = embedding_service.search_similar(
+                            supabase_client=supabase_admin_client,
+                            query=query,
+                            limit=5,
+                            semester=semester,
+                            branch=branch,
+                            subject_code=subject_code
+                        )
+                        print(f"   📍 Vector search returned: {len(vector_results) if vector_results else 0} results")
+                        context["vector_results"] = vector_results
+                    except Exception as vec_error:
+                        print(f"   ❌ Vector search error: {vec_error}")
+                else:
+                    print("   ⚠️ Embedding/Supabase not ready, skipping vector search")
             
             context["has_context"] = bool(context["kg_results"] or context["vector_results"])
             
@@ -210,6 +229,16 @@ class ChatService:
             branch=branch,
             subject_code=subject_code
         )
+        
+        # Log RAG context usage for debugging
+        kg_count = len(context.get("kg_results", []))
+        vector_count = len(context.get("vector_results", []))
+        routing_type = context.get("routing", {}).get("type", "unknown")
+        print(f"🔍 RAG Context: routing={routing_type}, kg_results={kg_count}, vector_results={vector_count}")
+        if kg_count > 0:
+            print(f"   📊 KG Topics: {[c.get('name', 'N/A') for c in context['kg_results'][:3]]}")
+        if vector_count > 0:
+            print(f"   📄 Vector Sources: {[r.get('subject_name', 'N/A') for r in context['vector_results'][:3]]}")
         
         # Format context for prompt
         context_str = self.format_context_for_prompt(context)
@@ -383,13 +412,21 @@ Your role:
 - Identify prerequisites and related topics to guide learning
 - Be accurate and cite the syllabus when relevant
 
-Guidelines:
-- ALWAYS use the provided context to answer syllabus-related questions
-- If context is provided, base your answer primarily on that information
-- Mention which subject/module the information comes from when relevant
-- If the context doesn't contain the answer, say so and provide general knowledge
-- Keep responses clear, structured, and educational
-- Use examples to explain complex concepts"""
+Response Formatting Guidelines:
+- Use **bold** for important terms and headings
+- Use bullet points or numbered lists for multiple items
+- Structure longer responses with clear sections
+- Include the actual subject code and module number when available from context
+- For module explanations, list the key topics covered
+- Keep responses educational and well-organized
+- Use markdown formatting for better readability
+
+Important Rules:
+- ALWAYS prioritize information from the provided context over general knowledge
+- If explaining a module, list all topics actually in that module from context
+- Do NOT make up page numbers or references - only cite what's in the context
+- If context doesn't have specific details, acknowledge this and provide helpful general information
+- Say "Based on the KTU syllabus..." when using context information"""
         
         if context:
             return f"""{base_prompt}
@@ -398,7 +435,7 @@ Guidelines:
 {context}
 === END OF CONTEXT ===
 
-Use the above context to answer the student's question. If the context is relevant, incorporate it into your response."""
+Use the above context to answer the student's question accurately. Base your response on the provided syllabus information."""
         
         return base_prompt
     

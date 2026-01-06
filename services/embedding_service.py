@@ -236,10 +236,26 @@ Keywords: {', '.join(keywords)}"""
             params["filter_subject"] = subject_code
         
         try:
-            result = supabase_client.rpc("search_syllabus", params).execute()
+            print(f"      🔎 Vector search with params: match_count={limit}, semester={semester}, branch={branch}, subject={subject_code}")
+            
+            # First check if we have any embeddings at all
+            count_check = supabase_client.table("syllabus_embeddings").select("id", count="exact").limit(1).execute()
+            embedding_count = count_check.count if hasattr(count_check, 'count') else len(count_check.data) if count_check.data else 0
+            print(f"      📊 Embeddings in database: {embedding_count}")
+            
+            if embedding_count == 0:
+                print(f"      ⚠️ No embeddings stored yet - run PDF upload to create embeddings")
+                return []
+            
+            result = supabase_client.rpc("search_syllabus_v2", params).execute()
+            if result.data:
+                print(f"      ✅ Vector found {len(result.data)} results")
+            else:
+                print(f"      ⚠️ Vector search returned empty (embeddings exist but no matches)")
             return result.data if result.data else []
         except Exception as e:
             logger.error(f"Similarity search error: {e}")
+            print(f"      ❌ Vector search error: {e}")
             # Fallback to basic search if RPC not available
             return self._fallback_search(supabase_client, query, limit, semester, branch, subject_code)
     
