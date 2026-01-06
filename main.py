@@ -4,6 +4,8 @@ Main application entry point
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, FileResponse
 from dotenv import load_dotenv
 import os
 
@@ -24,6 +26,9 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Include routers
 app.include_router(auth_router.router)
 app.include_router(chat_router.router)
@@ -37,6 +42,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Admin Dashboard Route
+@app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
+async def admin_dashboard():
+    """
+    Serve the Admin Dashboard HTML page
+    """
+    return FileResponse("templates/admin.html")
+
 
 
 # Root endpoint
