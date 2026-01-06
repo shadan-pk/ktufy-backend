@@ -17,8 +17,8 @@ class EmbeddingService:
     
     def __init__(self):
         self.model = None
-        self.model_name = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-        self.embedding_dimension = 384  # Default for MiniLM
+        self.model_name = os.getenv("EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
+        self.embedding_dimension = 768  # BGE-base dimension
         self._initialize_model()
     
     def _initialize_model(self):
@@ -41,18 +41,23 @@ class EmbeddingService:
         """Check if embedding service is ready"""
         return self.model is not None
     
-    def generate_embedding(self, text: str) -> List[float]:
+    def generate_embedding(self, text: str, is_query: bool = False) -> List[float]:
         """
         Generate embedding for a single text
         
         Args:
             text: Text to embed
+            is_query: If True, adds query prefix for BGE models (better retrieval)
             
         Returns:
             Embedding vector as list of floats
         """
         if not self.model:
             raise RuntimeError("Embedding model not loaded")
+        
+        # BGE models work better with instruction prefix for queries
+        if is_query and "bge" in self.model_name.lower():
+            text = f"Represent this sentence for searching relevant passages: {text}"
         
         embedding = self.model.encode(text)
         return embedding.tolist()
@@ -213,8 +218,8 @@ Keywords: {', '.join(keywords)}"""
         Returns:
             List of similar content with scores
         """
-        # Generate query embedding
-        query_embedding = self.generate_embedding(query)
+        # Generate query embedding (with query prefix for BGE models)
+        query_embedding = self.generate_embedding(query, is_query=True)
         
         # Build the RPC call for similarity search
         # This requires a function in Supabase - see setup SQL

@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS syllabus_embeddings (
     -- Content
     content TEXT NOT NULL,
     
-    -- Vector embedding (384 dimensions for all-MiniLM-L6-v2)
-    embedding vector(384),
+    -- Vector embedding (768 dimensions for BAAI/bge-base-en-v1.5)
+    embedding vector(768),
     
     -- Metadata for filtering
     subject_code TEXT,
