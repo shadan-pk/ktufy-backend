@@ -2,6 +2,8 @@
 
 const API_BASE = '/api/v1/admin';
 
+let activeUsersIntervalId = null;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Page Navigation
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -38,6 +40,12 @@ function showSection(sectionName) {
             loadJobs();
             break;
     }
+
+    // Stop dashboard-only pollers when leaving the dashboard
+    if (sectionName !== 'dashboard' && activeUsersIntervalId) {
+        clearInterval(activeUsersIntervalId);
+        activeUsersIntervalId = null;
+    }
 }
 
 // Initialize navigation
@@ -55,6 +63,68 @@ document.querySelectorAll('.sidebar .nav-link').forEach(link => {
 async function loadDashboard() {
     await loadSystemStatus();
     await refreshStats();
+    await loadActiveUsers();
+
+    if (activeUsersIntervalId) {
+        clearInterval(activeUsersIntervalId);
+    }
+    activeUsersIntervalId = setInterval(loadActiveUsers, 10000);
+}
+
+async function loadActiveUsers() {
+    const listEl = document.getElementById('active-users-list');
+    const metaEl = document.getElementById('active-users-meta');
+    if (!listEl || !metaEl) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/active-users?window_minutes=10`);
+        const data = await response.json();
+
+        const users = data.users || [];
+        metaEl.textContent = `${users.length} active (last ${data.window_minutes || 10} min)`;
+
+        if (users.length === 0) {
+            listEl.innerHTML = '<div class="list-group-item text-secondary">No active users</div>';
+            return;
+        }
+
+        const now = new Date();
+        listEl.innerHTML = users.map(u => {
+            const label = u.email || u.user_id;
+            const lastSeen = u.last_seen ? new Date(u.last_seen) : null;
+            const secondsAgo = lastSeen ? Math.max(0, Math.floor((now - lastSeen) / 1000)) : null;
+
+            let agoText = 'just now';
+            if (secondsAgo !== null) {
+                if (secondsAgo < 60) agoText = `${secondsAgo}s ago`;
+                else if (secondsAgo < 3600) agoText = `${Math.floor(secondsAgo / 60)}m ago`;
+                else agoText = `${Math.floor(secondsAgo / 3600)}h ago`;
+            }
+
+            return `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-semibold">${escapeHtml(label)}</div>
+                        <div class="small text-secondary">${escapeHtml(u.role || 'authenticated')}</div>
+                    </div>
+                    <small class="text-secondary">${agoText}</small>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading active users:', error);
+        metaEl.textContent = 'Failed to load';
+        listEl.innerHTML = '<div class="list-group-item text-secondary">Failed to load</div>';
+    }
+}
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
 }
 
 async function loadSystemStatus() {
@@ -220,6 +290,7 @@ async function pollJobProgress(jobId) {
     const progressBar = document.getElementById('progress-bar');
     const progressStatus = document.getElementById('progress-status');
     const progressPercent = document.getElementById('progress-percent');
+    const progressDetail = document.getElementById('progress-detail');
     
     const poll = async () => {
         try {
@@ -228,7 +299,8 @@ async function pollJobProgress(jobId) {
             
             progressBar.style.width = `${data.progress}%`;
             progressPercent.textContent = `${data.progress}%`;
-            progressStatus.textContent = data.message;
+            progressStatus.textContent = data.status === 'processing' ? 'Processing...' : (data.status || '');
+            if (progressDetail) progressDetail.textContent = data.message || '';
             
             if (data.status === 'completed') {
                 showToast('Processing completed successfully!', 'success');

@@ -102,12 +102,25 @@ async def get_current_user(
     user_data = await verify_supabase_token(token)
     
     # Create and return authenticated user
-    return AuthenticatedUser(
+    user = AuthenticatedUser(
         user_id=user_data["user_id"],
         email=user_data["email"],
         role=user_data.get("role", "authenticated"),
         metadata=user_data.get("metadata", {})
     )
+
+    try:
+        from services.active_users import active_user_tracker
+        await active_user_tracker.record(
+            user_id=user.user_id,
+            email=user.email,
+            role=user.role,
+        )
+    except Exception:
+        # Never fail auth due to telemetry/tracking issues
+        pass
+
+    return user
 
 
 async def get_optional_user(

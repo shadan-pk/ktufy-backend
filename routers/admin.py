@@ -21,6 +21,7 @@ from schemas.admin import (
 from services.syllabus_processor import syllabus_processor
 from services.neo4j_service import neo4j_service
 from services.embedding_service import embedding_service
+from services.active_users import active_user_tracker
 from utils.supabase_client import supabase_admin_client
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,18 @@ async def get_statistics():
         ),
         system_status="operational" if stats["system_status"]["neo4j"] else "degraded"
     )
+
+
+@router.get("/active-users", summary="Get active authenticated users")
+async def get_active_users(window_minutes: int = Query(10, ge=1, le=1440)):
+    """Return users seen within the last N minutes (based on authenticated requests)."""
+    active = await active_user_tracker.get_active(window_seconds=window_minutes * 60)
+    return {
+        "window_minutes": window_minutes,
+        "total": len(active),
+        "users": [u.to_dict() for u in active],
+        "timestamp": datetime.utcnow().isoformat(),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

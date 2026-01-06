@@ -184,6 +184,10 @@
             border: 1px solid rgba(255,255,255,0.1);
             color: var(--text-primary);
         }
+
+        .form-label {
+            color: var(--text-secondary);
+        }
         
         .form-control:focus, .form-select:focus {
             background: rgba(255,255,255,0.1);
@@ -194,6 +198,28 @@
         
         .form-select option {
             background: var(--card-bg);
+            color: var(--text-primary);
+        }
+
+        /* Modal theming (Bootstrap defaults are light) */
+        .modal-content {
+            background: var(--card-bg);
+            color: var(--text-primary);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .modal-header, .modal-footer {
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        .btn-close {
+            filter: invert(1) grayscale(100%);
+        }
+
+        .list-group-item {
+            background: rgba(255,255,255,0.03);
+            color: var(--text-primary);
+            border-color: rgba(255,255,255,0.1);
         }
         
         .search-box {
@@ -415,6 +441,23 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Active Users -->
+            <div class="row g-4 mt-1">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Active Users</h5>
+                            <small class="text-secondary" id="active-users-meta">Loading...</small>
+                        </div>
+                        <div class="card-body">
+                            <div id="active-users-list" class="list-group">
+                                <div class="list-group-item text-secondary">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </section>
         
         <!-- Upload Section -->
@@ -487,6 +530,7 @@
                         <div class="progress">
                             <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
                         </div>
+                        <div class="mt-2 small text-secondary" id="progress-detail"></div>
                     </div>
                 </div>
             </div>
