@@ -1,8 +1,9 @@
 """
-Embedding Service
-Generates and manages vector embeddings for RAG in Supabase pgvector
+Embedding Service V2 - KG-RAG Corrected Version
+Proper chunking with rich content and metadata
 """
 import os
+import re
 import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -12,13 +13,20 @@ logger = logging.getLogger(__name__)
 
 class EmbeddingService:
     """
-    Vector embedding service for RAG using Supabase pgvector
+    KG-RAG Corrected Embedding Service
+    
+    Key Improvements:
+    1. Proper chunking (not just titles)
+    2. chunk_type for query routing
+    3. Rich content for actual retrieval
+    4. Overlap between chunks
+    5. Clear separation from KG data
     """
     
     def __init__(self):
         self.model = None
         self.model_name = os.getenv("EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
-        self.embedding_dimension = 768  # BGE-base dimension
+        self.embedding_dimension = 768
         self._initialize_model()
     
     def _initialize_model(self):
@@ -27,13 +35,12 @@ class EmbeddingService:
             from sentence_transformers import SentenceTransformer
             self.model = SentenceTransformer(self.model_name)
             
-            # Get actual embedding dimension
             test_embedding = self.model.encode("test")
             self.embedding_dimension = len(test_embedding)
             
             logger.info(f"Embedding model '{self.model_name}' loaded. Dimension: {self.embedding_dimension}")
         except ImportError:
-            logger.warning("sentence-transformers not installed. Install with: pip install sentence-transformers")
+            logger.warning("sentence-transformers not installed")
         except Exception as e:
             logger.error(f"Error loading embedding model: {e}")
     
@@ -43,14 +50,11 @@ class EmbeddingService:
     
     def generate_embedding(self, text: str, is_query: bool = False) -> List[float]:
         """
-        Generate embedding for a single text
+        Generate embedding for text
         
         Args:
             text: Text to embed
-            is_query: If True, adds query prefix for BGE models (better retrieval)
-            
-        Returns:
-            Embedding vector as list of floats
+            is_query: If True, adds instruction prefix for BGE models
         """
         if not self.model:
             raise RuntimeError("Embedding model not loaded")
@@ -63,166 +67,116 @@ class EmbeddingService:
         return embedding.tolist()
     
     def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
-        """
-        Generate embeddings for multiple texts
-        
-        Args:
-            texts: List of texts to embed
-            
-        Returns:
-            List of embedding vectors
-        """
+        """Generate embeddings for multiple texts"""
         if not self.model:
             raise RuntimeError("Embedding model not loaded")
         
         embeddings = self.model.encode(texts)
         return [emb.tolist() for emb in embeddings]
     
-    def create_topic_embedding_text(
-        self,
-        topic_name: str,
-        topic_description: str,
-        keywords: List[str],
-        module_name: str,
-        subject_name: str,
-        subject_code: str
-    ) -> str:
-        """
-        Create rich text for embedding a topic
-        
-        Args:
-            topic_name: Name of the topic
-            topic_description: Description of the topic
-            keywords: Keywords for the topic
-            module_name: Name of the module
-            subject_name: Name of the subject
-            subject_code: Subject code
-            
-        Returns:
-            Rich text suitable for embedding
-        """
-        return f"""Subject: {subject_name} ({subject_code})
-Module: {module_name}
-Topic: {topic_name}
-Description: {topic_description}
-Keywords: {', '.join(keywords)}"""
-    
     # ═══════════════════════════════════════════════════════════════════════
-    # Supabase pgvector Operations
+    # Store Content Chunks (V2 Format)
     # ═══════════════════════════════════════════════════════════════════════
     
-    def store_embedding(
+    def store_content_chunks(
         self,
         supabase_client,
-        content: str,
-        embedding: List[float],
-        metadata: Dict[str, Any]
-    ) -> dict:
-        """
-        Store an embedding in Supabase pgvector
-        
-        Args:
-            supabase_client: Supabase client instance
-            content: Original text content
-            embedding: Embedding vector
-            metadata: Additional metadata
-            
-        Returns:
-            Created record
-        """
-        data = {
-            "content": content,
-            "embedding": embedding,
-            **metadata
-        }
-        
-        result = supabase_client.table("syllabus_embeddings").insert(data).execute()
-        return result.data[0] if result.data else None
-    
-    def store_topic_embedding(
-        self,
-        supabase_client,
-        topic: dict,
-        module: dict,
-        subject: dict,
+        content_chunks: List[dict],
         semester: int,
         branch: str,
         regulation: str = "2019"
     ) -> dict:
         """
-        Store embedding for a topic
+        Store content chunks from V2 extractor
         
         Args:
             supabase_client: Supabase client
-            topic: Topic data
-            module: Module data
-            subject: Subject data
+            content_chunks: List of chunk dicts from LLMExtractorV2
             semester: Semester number
             branch: Branch code
-            regulation: KTU regulation year
-            
-        Returns:
-            Created record
+            regulation: Regulation year
         """
-        # Create rich text
-        content = self.create_topic_embedding_text(
-            topic_name=topic["name"],
-            topic_description=topic.get("description", ""),
-            keywords=topic.get("keywords", []),
-            module_name=module.get("name", f"Module {module.get('number', '')}"),
-            subject_name=subject["name"],
-            subject_code=subject["code"]
-        )
+        stats = {
+            "chunks_stored": 0,
+            "by_type": {},
+            "errors": []
+        }
         
-        # Generate embedding
-        embedding = self.generate_embedding(content)
+        for chunk in content_chunks:
+            try:
+                chunk_type = chunk.get("chunk_type", "unknown")
+                
+                # Generate embedding for the content
+                content = chunk.get("content", "")
+                if not content:
+                    continue
+                
+                embedding = self.generate_embedding(content)
+                
+                # Merge metadata
+                metadata = chunk.get("metadata", {})
+                
+                # Store in Supabase
+                data = {
+                    "chunk_id": chunk.get("chunk_id", ""),
+                    "chunk_type": chunk_type,
+                    "content": content,
+                    "embedding": embedding,
+                    "subject_code": metadata.get("subject_code"),
+                    "subject_name": metadata.get("subject_name"),
+                    "module_number": metadata.get("module_number"),
+                    "module_name": metadata.get("module_name"),
+                    "module_id": metadata.get("module_id"),
+                    "topic_id": metadata.get("topic_id"),
+                    "topic_name": metadata.get("topic_name"),
+                    "semester": semester,
+                    "branch": branch,
+                    "regulation": regulation
+                }
+                
+                result = supabase_client.table("syllabus_embeddings").insert(data).execute()
+                
+                if result.data:
+                    stats["chunks_stored"] += 1
+                    stats["by_type"][chunk_type] = stats["by_type"].get(chunk_type, 0) + 1
+                    
+            except Exception as e:
+                error_msg = f"Error storing chunk '{chunk.get('chunk_id', 'unknown')}': {str(e)}"
+                logger.error(error_msg)
+                stats["errors"].append(error_msg)
         
-        # Store with metadata
-        return self.store_embedding(
-            supabase_client=supabase_client,
-            content=content,
-            embedding=embedding,
-            metadata={
-                "subject_code": subject["code"],
-                "subject_name": subject["name"],
-                "module_number": module.get("number"),
-                "module_name": module.get("name"),
-                "topic_name": topic["name"],
-                "keywords": topic.get("keywords", []),
-                "semester": semester,
-                "branch": branch,
-                "regulation": regulation
-            }
-        )
+        return stats
     
-    def search_similar(
+    # ═══════════════════════════════════════════════════════════════════════
+    # Search Operations (V2)
+    # ═══════════════════════════════════════════════════════════════════════
+    
+    def search(
         self,
         supabase_client,
         query: str,
         limit: int = 5,
+        chunk_types: List[str] = None,
         semester: Optional[int] = None,
         branch: Optional[str] = None,
-        subject_code: Optional[str] = None
+        subject_code: Optional[str] = None,
+        regulation: Optional[str] = None
     ) -> List[dict]:
         """
-        Search for similar content using vector similarity
+        Search for relevant content with filtering
         
         Args:
-            supabase_client: Supabase client
             query: Search query
-            limit: Maximum results
+            limit: Max results
+            chunk_types: Filter by chunk types (syllabus_content, topic_list, topic_detail, etc.)
             semester: Filter by semester
             branch: Filter by branch
             subject_code: Filter by subject
-            
-        Returns:
-            List of similar content with scores
+            regulation: Filter by regulation
         """
-        # Generate query embedding (with query prefix for BGE models)
         query_embedding = self.generate_embedding(query, is_query=True)
         
-        # Build the RPC call for similarity search
-        # This requires a function in Supabase - see setup SQL
+        # Try RPC function first
         params = {
             "query_embedding": query_embedding,
             "match_count": limit
@@ -234,25 +188,33 @@ Keywords: {', '.join(keywords)}"""
             params["filter_branch"] = branch
         if subject_code:
             params["filter_subject"] = subject_code
+        if regulation:
+            params["filter_regulation"] = regulation
+        if chunk_types:
+            params["filter_chunk_types"] = chunk_types
         
         try:
-            result = supabase_client.rpc("search_syllabus", params).execute()
+            result = supabase_client.rpc("search_syllabus_v2", params).execute()
             return result.data if result.data else []
         except Exception as e:
-            logger.error(f"Similarity search error: {e}")
-            # Fallback to basic search if RPC not available
-            return self._fallback_search(supabase_client, query, limit, semester, branch, subject_code)
+            logger.warning(f"RPC search failed, using fallback: {e}")
+            return self._fallback_search(
+                supabase_client, query, limit, chunk_types,
+                semester, branch, subject_code, regulation
+            )
     
     def _fallback_search(
         self,
         supabase_client,
         query: str,
         limit: int,
+        chunk_types: List[str],
         semester: Optional[int],
         branch: Optional[str],
-        subject_code: Optional[str]
+        subject_code: Optional[str],
+        regulation: Optional[str]
     ) -> List[dict]:
-        """Fallback text-based search if vector search fails"""
+        """Fallback text-based search"""
         query_builder = supabase_client.table("syllabus_embeddings").select("*")
         
         if semester:
@@ -261,88 +223,97 @@ Keywords: {', '.join(keywords)}"""
             query_builder = query_builder.eq("branch", branch)
         if subject_code:
             query_builder = query_builder.eq("subject_code", subject_code)
+        if regulation:
+            query_builder = query_builder.eq("regulation", regulation)
+        if chunk_types:
+            query_builder = query_builder.in_("chunk_type", chunk_types)
         
-        # Text search on content
+        # Text search
         query_builder = query_builder.ilike("content", f"%{query}%")
         
         result = query_builder.limit(limit).execute()
         return result.data if result.data else []
     
-    # ═══════════════════════════════════════════════════════════════════════
-    # Bulk Operations
-    # ═══════════════════════════════════════════════════════════════════════
-    
-    def store_syllabus_embeddings(
+    def search_by_concept(
         self,
         supabase_client,
-        syllabus_data: dict
-    ) -> dict:
+        concept_id: str,
+        chunk_types: List[str] = None,
+        limit: int = 10
+    ) -> List[dict]:
         """
-        Store embeddings for all topics in syllabus data
+        Get all content chunks for a specific concept
         
         Args:
-            supabase_client: Supabase client
-            syllabus_data: Structured syllabus data
-            
-        Returns:
-            Statistics about stored embeddings
+            concept_id: The canonical concept ID
+            chunk_types: Filter by chunk types
+            limit: Max results
         """
-        stats = {
-            "embeddings_created": 0,
-            "errors": []
-        }
+        query_builder = supabase_client.table("syllabus_embeddings").select("*")
+        query_builder = query_builder.eq("topic_id", concept_id)
         
-        semester = syllabus_data.get("semester", 0)
-        branch = syllabus_data.get("branch", "")
-        regulation = syllabus_data.get("regulation", "2019")
+        if chunk_types:
+            query_builder = query_builder.in_("chunk_type", chunk_types)
         
-        for subject in syllabus_data.get("subjects", []):
-            for module in subject.get("modules", []):
-                for topic in module.get("topics", []):
-                    try:
-                        self.store_topic_embedding(
-                            supabase_client=supabase_client,
-                            topic=topic,
-                            module=module,
-                            subject=subject,
-                            semester=semester,
-                            branch=branch,
-                            regulation=regulation
-                        )
-                        stats["embeddings_created"] += 1
-                    except Exception as e:
-                        error_msg = f"Error embedding topic '{topic.get('name', 'unknown')}': {str(e)}"
-                        logger.error(error_msg)
-                        stats["errors"].append(error_msg)
+        result = query_builder.limit(limit).execute()
+        return result.data if result.data else []
+    
+    def search_by_module(
+        self,
+        supabase_client,
+        module_id: str,
+        chunk_types: List[str] = None
+    ) -> List[dict]:
+        """Get all content chunks for a module"""
+        query_builder = supabase_client.table("syllabus_embeddings").select("*")
+        query_builder = query_builder.eq("module_id", module_id)
         
-        return stats
+        if chunk_types:
+            query_builder = query_builder.in_("chunk_type", chunk_types)
+        
+        result = query_builder.execute()
+        return result.data if result.data else []
+    
+    # ═══════════════════════════════════════════════════════════════════════
+    # Statistics
+    # ═══════════════════════════════════════════════════════════════════════
     
     def get_statistics(self, supabase_client) -> dict:
-        """Get embedding statistics from Supabase"""
+        """Get embedding statistics"""
         try:
-            # Count total embeddings
+            # Total count
             count_result = supabase_client.table("syllabus_embeddings").select("id", count="exact").execute()
             total = count_result.count or 0
             
-            # Get unique subjects
-            subjects_result = supabase_client.table("syllabus_embeddings").select("subject_code").execute()
-            unique_subjects = len(set(r["subject_code"] for r in subjects_result.data)) if subjects_result.data else 0
+            # Count by chunk type
+            all_data = supabase_client.table("syllabus_embeddings").select("chunk_type, subject_code, topic_id").execute()
             
-            # Get unique topics
-            topics_result = supabase_client.table("syllabus_embeddings").select("topic_name").execute()
-            unique_topics = len(set(r["topic_name"] for r in topics_result.data)) if topics_result.data else 0
+            by_type = {}
+            subjects = set()
+            topics = set()
+            
+            for row in all_data.data or []:
+                chunk_type = row.get("chunk_type", "unknown")
+                by_type[chunk_type] = by_type.get(chunk_type, 0) + 1
+                
+                if row.get("subject_code"):
+                    subjects.add(row["subject_code"])
+                if row.get("topic_id"):
+                    topics.add(row["topic_id"])
             
             return {
-                "total_embeddings": total,
-                "subjects_covered": unique_subjects,
-                "topics_covered": unique_topics,
+                "total_chunks": total,
+                "chunks_by_type": by_type,
+                "subjects_covered": len(subjects),
+                "topics_covered": len(topics),
                 "model": self.model_name,
                 "dimension": self.embedding_dimension
             }
         except Exception as e:
-            logger.error(f"Error getting embedding stats: {e}")
+            logger.error(f"Error getting stats: {e}")
             return {
-                "total_embeddings": 0,
+                "total_chunks": 0,
+                "chunks_by_type": {},
                 "subjects_covered": 0,
                 "topics_covered": 0,
                 "model": self.model_name,
@@ -350,38 +321,31 @@ Keywords: {', '.join(keywords)}"""
                 "error": str(e)
             }
     
-    def delete_embeddings(
-        self,
-        supabase_client,
+    # ═══════════════════════════════════════════════════════════════════════
+    # Cleanup
+    # ═══════════════════════════════════════════════════════════════════════
+    
+    def delete_by_subject(self, supabase_client, subject_code: str) -> int:
+        """Delete all embeddings for a subject"""
+        result = supabase_client.table("syllabus_embeddings").delete().eq(
+            "subject_code", subject_code
+        ).execute()
+        return len(result.data) if result.data else 0
+    
+    def delete_by_regulation(
+        self, 
+        supabase_client, 
+        regulation: str,
         semester: Optional[int] = None,
-        branch: Optional[str] = None,
-        subject_code: Optional[str] = None
+        branch: Optional[str] = None
     ) -> int:
-        """
-        Delete embeddings with optional filters
+        """Delete embeddings by regulation with optional filters"""
+        query = supabase_client.table("syllabus_embeddings").delete().eq("regulation", regulation)
         
-        Args:
-            supabase_client: Supabase client
-            semester: Filter by semester
-            branch: Filter by branch
-            subject_code: Filter by subject
-            
-        Returns:
-            Number of deleted records
-        """
-        query = supabase_client.table("syllabus_embeddings").delete()
-        
-        if subject_code:
-            query = query.eq("subject_code", subject_code)
-        elif branch and semester:
-            query = query.eq("branch", branch).eq("semester", semester)
-        elif branch:
-            query = query.eq("branch", branch)
-        elif semester:
+        if semester:
             query = query.eq("semester", semester)
-        else:
-            # Safety: require at least one filter for delete all
-            raise ValueError("At least one filter required for bulk delete")
+        if branch:
+            query = query.eq("branch", branch)
         
         result = query.execute()
         return len(result.data) if result.data else 0

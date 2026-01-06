@@ -1,6 +1,6 @@
 """
-Test script for KG-RAG V2 Implementation
-Run this to verify all V2 components work correctly
+Test script for KG-RAG Implementation
+Run this to verify all components work correctly
 """
 import os
 import sys
@@ -10,28 +10,28 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 def test_imports():
-    """Test all V2 service imports"""
-    print("\n=== Testing V2 Imports ===")
+    """Test all service imports"""
+    print("\n=== Testing Imports ===")
     
     try:
-        from services.llm_extractor_v2 import llm_extractor, LLMExtractorV2
-        print("✅ LLM Extractor V2")
+        from services.llm_extractor import llm_extractor, LLMExtractor
+        print("✅ LLM Extractor")
     except ImportError as e:
-        print(f"❌ LLM Extractor V2: {e}")
+        print(f"❌ LLM Extractor: {e}")
         return False
     
     try:
-        from services.neo4j_service_v2 import neo4j_service, Neo4jServiceV2
-        print("✅ Neo4j Service V2")
+        from services.neo4j_service import neo4j_service, Neo4jService
+        print("✅ Neo4j Service")
     except ImportError as e:
-        print(f"❌ Neo4j Service V2: {e}")
+        print(f"❌ Neo4j Service: {e}")
         return False
     
     try:
-        from services.embedding_service_v2 import embedding_service, EmbeddingServiceV2
-        print("✅ Embedding Service V2")
+        from services.embedding_service import embedding_service, EmbeddingService
+        print("✅ Embedding Service")
     except ImportError as e:
-        print(f"❌ Embedding Service V2: {e}")
+        print(f"❌ Embedding Service: {e}")
         return False
     
     try:
@@ -42,17 +42,17 @@ def test_imports():
         return False
     
     try:
-        from services.syllabus_processor_v2 import syllabus_processor, SyllabusProcessorV2
-        print("✅ Syllabus Processor V2")
+        from services.syllabus_processor import syllabus_processor, SyllabusProcessor
+        print("✅ Syllabus Processor")
     except ImportError as e:
-        print(f"❌ Syllabus Processor V2: {e}")
+        print(f"❌ Syllabus Processor: {e}")
         return False
     
     try:
-        from routers.admin_v2 import router
-        print("✅ Admin Router V2")
+        from routers.admin import router
+        print("✅ Admin Router")
     except ImportError as e:
-        print(f"❌ Admin Router V2: {e}")
+        print(f"❌ Admin Router: {e}")
         return False
     
     return True
@@ -62,7 +62,7 @@ def test_canonical_id():
     """Test canonical ID generation"""
     print("\n=== Testing Canonical ID Generation ===")
     
-    from services.llm_extractor_v2 import to_canonical_id
+    from services.llm_extractor import to_canonical_id
     
     test_cases = [
         ("Arrays and Linked Lists", "cs201_m1", "cs201_m1_arrays_and_linked_lists"),
@@ -86,7 +86,7 @@ def test_compound_splitting():
     """Test compound concept splitting"""
     print("\n=== Testing Compound Concept Splitting ===")
     
-    from services.llm_extractor_v2 import split_compound_concepts
+    from services.llm_extractor import split_compound_concepts
     
     test_cases = [
         ("DFS and BFS", ["DFS", "BFS"]),
@@ -137,11 +137,10 @@ def test_system_status():
     """Test system status"""
     print("\n=== Testing System Status ===")
     
-    from services.syllabus_processor_v2 import syllabus_processor
+    from services.syllabus_processor import syllabus_processor
     
     status = syllabus_processor.get_status()
     
-    print(f"Version: {status.get('version', 'unknown')}")
     print(f"PDF Processor: {'✅' if status['pdf_processor'] else '❌'}")
     print(f"LLM Extractor: {'✅' if status['llm_extractor'] else '❌'}")
     print(f"Neo4j: {'✅' if status['neo4j'] else '⚠️ Not connected'}")
@@ -153,7 +152,7 @@ def test_system_status():
 def main():
     """Run all tests"""
     print("=" * 50)
-    print("KG-RAG V2 Implementation Test")
+    print("KG-RAG Implementation Test")
     print("=" * 50)
     
     results = []
@@ -175,7 +174,7 @@ def main():
     all_passed = all(r[1] for r in results)
     print("\n" + "=" * 50)
     if all_passed:
-        print("✅ All V2 tests passed!")
+        print("✅ All tests passed!")
     else:
         print("❌ Some tests failed")
     print("=" * 50)

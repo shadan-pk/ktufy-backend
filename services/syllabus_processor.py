@@ -1,6 +1,6 @@
 """
-Syllabus Processor Service
-Main orchestrator for PDF → Knowledge Graph + RAG pipeline
+Syllabus Processor - KG-RAG Pipeline
+Orchestrates the extraction and storage pipeline
 """
 import os
 import uuid
@@ -19,16 +19,20 @@ logger = logging.getLogger(__name__)
 class ProcessingJob:
     """Represents a syllabus processing job"""
     
-    def __init__(self, job_id: str, filename: str, semester: int, branch: str):
+    def __init__(self, job_id: str, filename: str, semester: int, branch: str, regulation: str = "2019"):
         self.job_id = job_id
         self.filename = filename
         self.semester = semester
         self.branch = branch
+        self.regulation = regulation
         self.status = "pending"
         self.progress = 0
         self.message = "Job created"
         self.subjects_processed = 0
         self.total_subjects = 0
+        self.concepts_created = 0
+        self.chunks_stored = 0
+        self.relationships_created = 0
         self.started_at: Optional[datetime] = None
         self.completed_at: Optional[datetime] = None
         self.result: Optional[dict] = None
@@ -40,11 +44,15 @@ class ProcessingJob:
             "filename": self.filename,
             "semester": self.semester,
             "branch": self.branch,
+            "regulation": self.regulation,
             "status": self.status,
             "progress": self.progress,
             "message": self.message,
             "subjects_processed": self.subjects_processed,
             "total_subjects": self.total_subjects,
+            "concepts_created": self.concepts_created,
+            "chunks_stored": self.chunks_stored,
+            "relationships_created": self.relationships_created,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "error": self.error
@@ -53,8 +61,13 @@ class ProcessingJob:
 
 class SyllabusProcessor:
     """
-    Main orchestrator for processing KTU syllabus PDFs
-    Coordinates: PDF extraction → LLM parsing → Neo4j KG → pgvector embeddings
+    KG-RAG Corrected Syllabus Processor
+    
+    Pipeline:
+    1. PDF → Raw Text (pdfplumber)
+    2. Raw Text → Structured Data with atomic concepts (LLM V2)
+    3. Structured Data → Knowledge Graph (Neo4j V2)
+    4. Content Chunks → Vector Embeddings (pgvector V2)
     """
     
     def __init__(self):
@@ -69,13 +82,14 @@ class SyllabusProcessor:
             "llm_extractor": llm_extractor.groq_client is not None or llm_extractor.openai_client is not None,
             "neo4j": neo4j_service.is_connected(),
             "embedding_model": embedding_service.is_ready(),
-            "active_jobs": len([j for j in self.jobs.values() if j.status == "processing"])
+            "active_jobs": len([j for j in self.jobs.values() if j.status == "processing"]),
+            "version": "2.0"
         }
     
-    def create_job(self, filename: str, semester: int, branch: str) -> ProcessingJob:
+    def create_job(self, filename: str, semester: int, branch: str, regulation: str = "2019") -> ProcessingJob:
         """Create a new processing job"""
         job_id = str(uuid.uuid4())
-        job = ProcessingJob(job_id, filename, semester, branch)
+        job = ProcessingJob(job_id, filename, semester, branch, regulation)
         self.jobs[job_id] = job
         return job
     
@@ -92,26 +106,16 @@ class SyllabusProcessor:
         pdf_path: str,
         semester: int,
         branch: str,
+        regulation: str = "2019",
         job: Optional[ProcessingJob] = None,
-        supabase_client=None,
-        regulation: str = "2019"
+        supabase_client=None
     ) -> dict:
         """
-        Process a syllabus PDF end-to-end
-        
-        Args:
-            pdf_path: Path to the PDF file
-            semester: Semester number
-            branch: Branch code
-            job: Optional job to track progress
-            supabase_client: Supabase client for embeddings
-            regulation: KTU regulation year (2019, 2024, etc.)
-            
-        Returns:
-            Processing results
+        Process a syllabus PDF using the corrected V2 pipeline
         """
         result = {
             "success": False,
+            "version": "2.0",
             "pdf_extraction": None,
             "llm_extraction": None,
             "knowledge_graph": None,
@@ -141,43 +145,51 @@ class SyllabusProcessor:
             }
             
             if job:
-                job.progress = 20
-                job.message = "PDF text extracted. Analyzing with AI..."
+                job.progress = 15
+                job.message = "Text extracted. Parsing syllabus structure..."
             
             # ═══════════════════════════════════════════════════════════════
-            # Step 2: Extract structured data using LLM
+            # Step 2: Extract structured data with V2 extractor
             # ═══════════════════════════════════════════════════════════════
-            logger.info("Step 2: Extracting structured data with LLM")
+            logger.info("Step 2: Extracting structured data with LLM V2")
             
             structured_data = llm_extractor.extract_syllabus_structure(
                 raw_text=raw_text,
                 semester=semester,
-                branch=branch
+                branch=branch,
+                regulation=regulation
             )
             
             subjects_count = len(structured_data.get("subjects", []))
+            concepts_count = len(structured_data.get("concepts", []))
+            relationships_count = len(structured_data.get("relationships", []))
+            chunks_count = len(structured_data.get("content_chunks", []))
+            
             result["llm_extraction"] = {
                 "subjects_found": subjects_count,
+                "concepts_extracted": concepts_count,
+                "relationships_identified": relationships_count,
+                "content_chunks_generated": chunks_count,
                 "status": "success"
             }
             
-            # Add regulation to structured data
-            structured_data["regulation"] = regulation
-            for subject in structured_data.get("subjects", []):
-                subject["regulation"] = regulation
-            
             if job:
                 job.total_subjects = subjects_count
-                job.progress = 50
-                job.message = f"Found {subjects_count} subjects. Building knowledge graph..."
+                job.progress = 40
+                job.message = f"Found {subjects_count} subjects, {concepts_count} concepts. Building knowledge graph..."
             
             # ═══════════════════════════════════════════════════════════════
-            # Step 3: Load into Neo4j Knowledge Graph
+            # Step 3: Load into Neo4j Knowledge Graph (V2)
             # ═══════════════════════════════════════════════════════════════
-            logger.info("Step 3: Loading data into Neo4j Knowledge Graph")
+            logger.info("Step 3: Loading data into Neo4j V2 Knowledge Graph")
             
             if neo4j_service.is_connected():
+                # Setup schema first
+                neo4j_service.setup_schema()
+                
+                # Load data
                 kg_stats = neo4j_service.load_syllabus_data(structured_data)
+                
                 result["knowledge_graph"] = {
                     **kg_stats,
                     "status": "success"
@@ -185,30 +197,39 @@ class SyllabusProcessor:
                 
                 if job:
                     job.subjects_processed = kg_stats["subjects_created"]
-                    job.progress = 75
-                    job.message = "Knowledge graph updated. Generating embeddings..."
+                    job.concepts_created = kg_stats["concepts_created"]
+                    job.relationships_created = kg_stats["relationships_created"]
+                    job.progress = 70
+                    job.message = f"KG built: {kg_stats['concepts_created']} concepts, {kg_stats['relationships_created']} relationships. Storing embeddings..."
             else:
                 result["knowledge_graph"] = {"status": "skipped", "reason": "Neo4j not connected"}
-                result["errors"].append("Neo4j not connected - knowledge graph not updated")
+                result["errors"].append("Neo4j not connected")
             
             # ═══════════════════════════════════════════════════════════════
-            # Step 4: Generate and store embeddings
+            # Step 4: Store embeddings in pgvector (V2)
             # ═══════════════════════════════════════════════════════════════
-            logger.info("Step 4: Generating embeddings for RAG")
+            logger.info("Step 4: Storing content chunk embeddings")
             
             if supabase_client and embedding_service.is_ready():
-                emb_stats = embedding_service.store_syllabus_embeddings(
+                content_chunks = structured_data.get("content_chunks", [])
+                
+                emb_stats = embedding_service.store_content_chunks(
                     supabase_client=supabase_client,
-                    syllabus_data=structured_data
+                    content_chunks=content_chunks,
+                    semester=semester,
+                    branch=branch,
+                    regulation=regulation
                 )
+                
                 result["embeddings"] = {
                     **emb_stats,
                     "status": "success"
                 }
                 
                 if job:
+                    job.chunks_stored = emb_stats["chunks_stored"]
                     job.progress = 95
-                    job.message = "Embeddings generated. Finalizing..."
+                    job.message = f"Stored {emb_stats['chunks_stored']} content chunks. Finalizing..."
             else:
                 reason = []
                 if not supabase_client:
@@ -222,7 +243,6 @@ class SyllabusProcessor:
             # Complete
             # ═══════════════════════════════════════════════════════════════
             result["success"] = True
-            result["structured_data"] = structured_data
             
             if job:
                 job.status = "completed"
@@ -231,7 +251,7 @@ class SyllabusProcessor:
                 job.completed_at = datetime.utcnow()
                 job.result = result
             
-            logger.info("Syllabus processing completed successfully")
+            logger.info("Syllabus processing V2 completed successfully")
             
         except Exception as e:
             error_msg = str(e)
@@ -246,88 +266,30 @@ class SyllabusProcessor:
         
         return result
     
-    def process_pdf_sync(
-        self,
-        pdf_path: str,
-        semester: int,
-        branch: str,
-        supabase_client=None
-    ) -> dict:
-        """
-        Synchronous version for simple use cases
-        """
-        import asyncio
-        return asyncio.run(self.process_pdf(pdf_path, semester, branch, None, supabase_client))
-    
-    # ═══════════════════════════════════════════════════════════════════════
-    # Manual Operations
-    # ═══════════════════════════════════════════════════════════════════════
-    
-    def add_subject_manual(
-        self,
-        subject_data: dict,
-        supabase_client=None
-    ) -> dict:
-        """
-        Manually add a subject to the knowledge graph and embeddings
+    def get_full_statistics(self, supabase_client) -> dict:
+        """Get full statistics from both KG and embeddings"""
+        kg_stats = {}
+        emb_stats = {}
         
-        Args:
-            subject_data: Subject information with modules and topics
-            supabase_client: Supabase client for embeddings
-            
-        Returns:
-            Result statistics
-        """
-        result = {
-            "knowledge_graph": None,
-            "embeddings": None,
-            "errors": []
+        if neo4j_service.is_connected():
+            kg_stats = neo4j_service.get_statistics()
+        
+        if supabase_client and embedding_service.is_ready():
+            emb_stats = embedding_service.get_statistics(supabase_client)
+        
+        return {
+            "knowledge_graph": kg_stats,
+            "embeddings": emb_stats,
+            "system_status": self.get_status()
         }
-        
-        try:
-            # Add to Neo4j
-            if neo4j_service.is_connected():
-                neo4j_service.create_subject(subject_data)
-                
-                for module in subject_data.get("modules", []):
-                    neo4j_service.create_module(module, subject_data["code"])
-                    module_id = f"{subject_data['code']}_M{module['number']}"
-                    
-                    for topic in module.get("topics", []):
-                        neo4j_service.create_topic(topic, module_id)
-                
-                result["knowledge_graph"] = {"status": "success"}
-            
-            # Add embeddings
-            if supabase_client and embedding_service.is_ready():
-                data = {
-                    "semester": subject_data.get("semester", 0),
-                    "branch": subject_data.get("branch", ""),
-                    "subjects": [subject_data]
-                }
-                emb_result = embedding_service.store_syllabus_embeddings(supabase_client, data)
-                result["embeddings"] = emb_result
-            
-        except Exception as e:
-            result["errors"].append(str(e))
-        
-        return result
     
     def delete_subject(
         self,
         subject_code: str,
+        regulation: str = "2019",
         supabase_client=None
     ) -> dict:
-        """
-        Delete a subject from both KG and embeddings
-        
-        Args:
-            subject_code: Subject code to delete
-            supabase_client: Supabase client
-            
-        Returns:
-            Deletion result
-        """
+        """Delete a subject from both KG and embeddings"""
         result = {
             "knowledge_graph": False,
             "embeddings_deleted": 0
@@ -335,43 +297,15 @@ class SyllabusProcessor:
         
         # Delete from Neo4j
         if neo4j_service.is_connected():
-            result["knowledge_graph"] = neo4j_service.delete_subject(subject_code)
+            result["knowledge_graph"] = neo4j_service.delete_subject(subject_code, regulation)
         
-        # Delete embeddings
+        # Delete from pgvector
         if supabase_client:
-            try:
-                deleted = embedding_service.delete_embeddings(
-                    supabase_client,
-                    subject_code=subject_code
-                )
-                result["embeddings_deleted"] = deleted
-            except Exception as e:
-                logger.error(f"Error deleting embeddings: {e}")
+            result["embeddings_deleted"] = embedding_service.delete_by_subject(
+                supabase_client, subject_code
+            )
         
         return result
-    
-    # ═══════════════════════════════════════════════════════════════════════
-    # Statistics
-    # ═══════════════════════════════════════════════════════════════════════
-    
-    def get_full_statistics(self, supabase_client=None) -> dict:
-        """Get complete system statistics"""
-        stats = {
-            "system_status": self.get_status(),
-            "knowledge_graph": neo4j_service.get_statistics(),
-            "embeddings": None,
-            "processing_jobs": {
-                "total": len(self.jobs),
-                "completed": len([j for j in self.jobs.values() if j.status == "completed"]),
-                "failed": len([j for j in self.jobs.values() if j.status == "failed"]),
-                "processing": len([j for j in self.jobs.values() if j.status == "processing"])
-            }
-        }
-        
-        if supabase_client:
-            stats["embeddings"] = embedding_service.get_statistics(supabase_client)
-        
-        return stats
 
 
 # Global instance

@@ -13,7 +13,6 @@ import os
 from routers import auth as auth_router
 from routers import chat as chat_router
 from routers import admin as admin_router
-from routers import admin_v2 as admin_v2_router  # V2 KG-RAG corrected router
 
 # Load environment variables
 load_dotenv()
@@ -21,8 +20,8 @@ load_dotenv()
 # Initialize FastAPI app
 app = FastAPI(
     title=os.getenv("APP_NAME", "KTUfy Backend API"),
-    version=os.getenv("APP_VERSION", "1.0.0"),
-    description="AI-powered study assistant for KTU students",
+    version=os.getenv("APP_VERSION", "2.0.0"),
+    description="AI-powered study assistant for KTU students with KG-RAG",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -34,7 +33,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router.router)
 app.include_router(chat_router.router)
 app.include_router(admin_router.router)
-app.include_router(admin_v2_router.router)  # V2 endpoints at /api/v2/admin
 
 # Configure CORS
 app.add_middleware(
@@ -76,16 +74,16 @@ async def health_check():
     """
     Detailed health check endpoint
     """
-    # Check Neo4j connection (V2)
+    # Check Neo4j connection
     try:
-        from services.neo4j_service_v2 import neo4j_service
+        from services.neo4j_service import neo4j_service
         neo4j_status = "operational" if neo4j_service.is_connected() else "not_connected"
     except:
         neo4j_status = "not_configured"
     
-    # Check embedding service (V2)
+    # Check embedding service
     try:
-        from services.embedding_service_v2 import embedding_service
+        from services.embedding_service import embedding_service
         embedding_status = "operational" if embedding_service.is_ready() else "not_ready"
     except:
         embedding_status = "not_configured"
@@ -93,7 +91,6 @@ async def health_check():
     return {
         "status": "healthy",
         "environment": os.getenv("ENVIRONMENT", "development"),
-        "api_version": "v2",
         "services": {
             "api": "operational",
             "authentication": "operational",
@@ -105,45 +102,24 @@ async def health_check():
     }
 
 
-# API version info
-@app.get("/api/v1/status")
+# API status
+@app.get("/api/status")
 async def api_status():
     """
-    API version and status information
+    API status - KG-RAG implementation
     """
     return {
-        "api_version": "v1",
         "status": "active",
+        "description": "KG-RAG implementation with proper ontology",
         "features": {
             "authentication": "operational",
-            "notes_upload": "pending",
             "kg_rag": "operational",
-            "content_generation": "pending",
-            "progress_tracking": "pending",
-            "admin_dashboard": "operational"
-        }
-    }
-
-
-# V2 API status
-@app.get("/api/v2/status")
-async def api_v2_status():
-    """
-    V2 API status - KG-RAG corrected implementation
-    """
-    return {
-        "api_version": "v2",
-        "status": "active",
-        "description": "KG-RAG corrected implementation with proper ontology",
-        "features": {
-            "authentication": "operational",
-            "kg_rag_v2": "operational",
             "verbatim_extraction": "operational",
             "atomic_concepts": "operational",
             "semantic_relationships": "operational",
             "query_routing": "operational",
             "chunk_based_embeddings": "operational",
-            "admin_dashboard_v2": "operational"
+            "admin_dashboard": "operational"
         },
         "relationship_types": ["IS_A", "PART_OF", "PREREQUISITE_OF", "USES", "IMPLEMENTS", "RELATED_TO"],
         "chunk_types": ["syllabus_content", "topic_list", "topic_detail", "course_outcomes", "references"]
