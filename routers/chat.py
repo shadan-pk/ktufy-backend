@@ -167,13 +167,13 @@ async def send_message(
     current_user: AuthenticatedUser = Depends(get_current_user)
 ):
     """
-    Send a message and get AI response
+    Send a message and get AI response with KG-RAG context
     
     **Requires authentication**: Bearer token in Authorization header
     
     Sends a message in a chat session and gets an AI-generated response.
-    If no session_id is provided, a new session is created automatically.
-    The conversation history is maintained for context.
+    The system automatically fetches relevant context from the Knowledge Graph
+    and syllabus embeddings to provide accurate, syllabus-based answers.
     
     Args:
         chat_request: Message content and optional session_id
@@ -225,25 +225,30 @@ async def send_message(
                 detail="Failed to save user message"
             )
         
-        # Get conversation history for context
+        # Get conversation history for context (exclude current message)
         history_response = supabase_admin_client.table("chat_messages")\
             .select("role, content")\
             .eq("session_id", session_id)\
             .order("created_at")\
             .execute()
         
-        # Build messages for AI (system prompt + history)
-        messages = [{"role": "system", "content": chat_service.get_system_prompt()}]
-        
+        # Build conversation history (exclude the just-saved user message)
+        conversation_history = []
         if history_response.data:
-            messages.extend([
-                {"role": msg["role"], "content": msg["content"]}
-                for msg in history_response.data
-            ])
+            # Take all but the last message (which is the current query)
+            for msg in history_response.data[:-1]:
+                conversation_history.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
         
-        # Generate AI response
+        # Generate AI response using KG-RAG
         try:
-            ai_response = await chat_service.generate_response(messages, stream=False)
+            ai_response = await chat_service.generate_rag_response(
+                query=chat_request.message,
+                conversation_history=conversation_history,
+                stream=False
+            )
         except Exception as e:
             # If AI generation fails, still return the user message
             raise HTTPException(

@@ -1,12 +1,20 @@
 """
 Chat Service
-Handles AI model interaction for chatbot functionality
+Handles AI model interaction for chatbot functionality with KG-RAG integration
 Supports both Groq API (cloud) and Ollama (local)
 """
 import os
-from typing import Optional, AsyncGenerator, Union
+import logging
+from typing import Optional, AsyncGenerator, Union, List, Dict, Any
 import httpx
 from groq import Groq
+
+from services.query_router import query_router, QueryType
+from services.neo4j_service import neo4j_service
+from services.embedding_service import embedding_service
+from utils.supabase_client import supabase_admin_client
+
+logger = logging.getLogger(__name__)
 
 
 class ChatService:
@@ -31,6 +39,194 @@ class ChatService:
         else:
             self.model = "llama3"
             print(f"✅ Chat service initialized with Ollama (model: {self.model})")
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # KG-RAG Integration Methods
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    async def get_rag_context(
+        self,
+        query: str,
+        semester: Optional[int] = None,
+        branch: Optional[str] = None,
+        subject_code: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get relevant context from Knowledge Graph and Vector Store using intelligent routing
+        
+        Args:
+            query: User's question
+            semester: Optional filter by semester
+            branch: Optional filter by branch
+            subject_code: Optional filter by subject
+            
+        Returns:
+            Dictionary with kg_context, vector_context, and routing info
+        """
+        context = {
+            "kg_results": [],
+            "vector_results": [],
+            "routing": None,
+            "has_context": False
+        }
+        
+        try:
+            # Route the query to determine best data source
+            query_type, metadata = query_router.route(query)
+            context["routing"] = {
+                "type": query_type.value,
+                "metadata": metadata
+            }
+            
+            # Fetch from Knowledge Graph
+            if query_type in [QueryType.KG_ONLY, QueryType.KG_THEN_VECTOR, QueryType.HYBRID]:
+                if neo4j_service.is_connected():
+                    # Search for relevant concepts
+                    kg_results = neo4j_service.search_concepts(query, limit=5)
+                    
+                    # For each concept, get additional context
+                    for concept in kg_results[:3]:
+                        concept_id = concept.get("canonical_id")
+                        if concept_id:
+                            # Get prerequisites
+                            prereqs = neo4j_service.get_prerequisites(concept_id)
+                            concept["prerequisites"] = prereqs[:3] if prereqs else []
+                            
+                            # Get related concepts
+                            relationships = neo4j_service.get_concept_relationships(concept_id)
+                            concept["relationships"] = relationships[:5] if relationships else []
+                    
+                    context["kg_results"] = kg_results
+            
+            # Fetch from Vector Store
+            if query_type in [QueryType.VECTOR_ONLY, QueryType.VECTOR_THEN_KG, QueryType.HYBRID]:
+                if embedding_service.is_ready() and supabase_admin_client:
+                    # Determine chunk types based on query
+                    chunk_types = None
+                    if "syllabus" in query.lower() or "topics" in query.lower():
+                        chunk_types = ["syllabus_content", "topic_list"]
+                    elif "explain" in query.lower() or "what is" in query.lower():
+                        chunk_types = ["topic_detail", "syllabus_content"]
+                    
+                    vector_results = embedding_service.search_similar(
+                        supabase_client=supabase_admin_client,
+                        query=query,
+                        limit=5,
+                        semester=semester,
+                        branch=branch,
+                        subject_code=subject_code,
+                        chunk_types=chunk_types
+                    )
+                    context["vector_results"] = vector_results
+            
+            context["has_context"] = bool(context["kg_results"] or context["vector_results"])
+            
+        except Exception as e:
+            logger.error(f"Error fetching RAG context: {e}")
+        
+        return context
+    
+    def format_context_for_prompt(self, context: Dict[str, Any]) -> str:
+        """
+        Format the RAG context into a string for the LLM prompt
+        
+        Args:
+            context: Dictionary with kg_results and vector_results
+            
+        Returns:
+            Formatted context string
+        """
+        if not context.get("has_context"):
+            return ""
+        
+        parts = []
+        
+        # Format Knowledge Graph results
+        kg_results = context.get("kg_results", [])
+        if kg_results:
+            parts.append("=== KNOWLEDGE GRAPH CONTEXT ===")
+            for i, concept in enumerate(kg_results[:3], 1):
+                parts.append(f"\n**Concept {i}: {concept.get('name', 'Unknown')}**")
+                if concept.get("subject_name"):
+                    parts.append(f"Subject: {concept.get('subject_name')}")
+                if concept.get("module_name"):
+                    parts.append(f"Module: {concept.get('module_name')}")
+                if concept.get("description"):
+                    parts.append(f"Description: {concept.get('description')}")
+                
+                # Prerequisites
+                prereqs = concept.get("prerequisites", [])
+                if prereqs:
+                    prereq_names = [p.get("name", "") for p in prereqs if p.get("name")]
+                    if prereq_names:
+                        parts.append(f"Prerequisites: {', '.join(prereq_names)}")
+                
+                # Related concepts
+                rels = concept.get("relationships", [])
+                if rels:
+                    for rel in rels[:3]:
+                        parts.append(f"  - {rel.get('type', 'RELATED')}: {rel.get('target_name', '')}")
+        
+        # Format Vector Store results
+        vector_results = context.get("vector_results", [])
+        if vector_results:
+            parts.append("\n=== SYLLABUS CONTENT ===")
+            for i, result in enumerate(vector_results[:3], 1):
+                parts.append(f"\n**Source {i}:** {result.get('subject_name', '')} - {result.get('module_name', '')}")
+                content = result.get("content", "")
+                # Truncate long content
+                if len(content) > 500:
+                    content = content[:500] + "..."
+                parts.append(content)
+        
+        return "\n".join(parts)
+    
+    async def generate_rag_response(
+        self,
+        query: str,
+        conversation_history: List[Dict[str, str]] = None,
+        semester: Optional[int] = None,
+        branch: Optional[str] = None,
+        subject_code: Optional[str] = None,
+        stream: bool = False
+    ) -> Union[str, AsyncGenerator[str, None]]:
+        """
+        Generate AI response with KG-RAG context
+        
+        Args:
+            query: User's question
+            conversation_history: Previous messages in the conversation
+            semester: Optional filter
+            branch: Optional filter
+            subject_code: Optional filter
+            stream: Whether to stream response
+            
+        Returns:
+            AI response string or async generator for streaming
+        """
+        # Get RAG context
+        context = await self.get_rag_context(
+            query=query,
+            semester=semester,
+            branch=branch,
+            subject_code=subject_code
+        )
+        
+        # Format context for prompt
+        context_str = self.format_context_for_prompt(context)
+        
+        # Build messages
+        messages = [{"role": "system", "content": self.get_rag_system_prompt(context_str)}]
+        
+        # Add conversation history
+        if conversation_history:
+            messages.extend(conversation_history)
+        
+        # Add current query
+        messages.append({"role": "user", "content": query})
+        
+        # Generate response
+        return await self.generate_response(messages, stream=stream)
     
     async def generate_response(
         self, 
@@ -166,6 +362,46 @@ Guidelines:
 - Encourage active learning and critical thinking
 
 Remember: You're here to help students learn and succeed in their studies!"""
+    
+    def get_rag_system_prompt(self, context: str = "") -> str:
+        """
+        Get the system prompt with RAG context for KG-RAG responses
+        
+        Args:
+            context: Formatted context from Knowledge Graph and Vector Store
+            
+        Returns:
+            System prompt with context
+        """
+        base_prompt = """You are KTUfy AI, an intelligent study assistant for KTU (Kerala Technological University) students.
+
+You have access to the official KTU syllabus and course materials through a Knowledge Graph and document database.
+
+Your role:
+- Answer questions using the provided syllabus context when available
+- Help students understand their course materials and topics
+- Explain concepts clearly based on what's in their actual syllabus
+- Identify prerequisites and related topics to guide learning
+- Be accurate and cite the syllabus when relevant
+
+Guidelines:
+- ALWAYS use the provided context to answer syllabus-related questions
+- If context is provided, base your answer primarily on that information
+- Mention which subject/module the information comes from when relevant
+- If the context doesn't contain the answer, say so and provide general knowledge
+- Keep responses clear, structured, and educational
+- Use examples to explain complex concepts"""
+        
+        if context:
+            return f"""{base_prompt}
+
+=== RELEVANT CONTEXT FROM KTU SYLLABUS ===
+{context}
+=== END OF CONTEXT ===
+
+Use the above context to answer the student's question. If the context is relevant, incorporate it into your response."""
+        
+        return base_prompt
     
     def get_provider_info(self) -> dict:
         """
