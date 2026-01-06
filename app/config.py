@@ -37,18 +37,24 @@ class Settings(BaseSettings):
     # Redis Configuration (for Phase 8)
     redis_url: Optional[str] = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     
+    # Neo4j Configuration (Knowledge Graph)
+    neo4j_uri: str = Field(default="bolt://localhost:7687", alias="NEO4J_URI")
+    neo4j_username: str = Field(default="neo4j", alias="NEO4J_USERNAME")
+    neo4j_password: str = Field(default="password", alias="NEO4J_PASSWORD")
+    
     # File Upload Settings
     max_upload_size: int = Field(default=10485760, alias="MAX_UPLOAD_SIZE")  # 10MB
     allowed_extensions: str = Field(default=".pdf,.jpg,.jpeg,.png", alias="ALLOWED_EXTENSIONS")
+    upload_dir: str = Field(default="uploads/syllabus", alias="UPLOAD_DIR")
     
-    # Vector Database Settings (for Phase 5)
-    chroma_persist_directory: str = Field(default="./vector_store", alias="CHROMA_PERSIST_DIRECTORY")
+    # Embedding Model Settings
     embedding_model: str = Field(
-        default="sentence-transformers/all-MiniLM-L6-v2", 
+        default="all-MiniLM-L6-v2", 
         alias="EMBEDDING_MODEL"
     )
     
-    # LLM Configuration (for Phase 6)
+    # LLM Configuration
+    groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
     ollama_base_url: Optional[str] = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
     ollama_model: Optional[str] = Field(default="llama3.2", alias="OLLAMA_MODEL")
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")

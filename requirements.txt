@@ -30,6 +30,17 @@ requests==2.31.0  # For testing endpoints
 # AI/ML Models
 groq>=0.4.0                # Cloud LLM (Groq API)
 httpx>=0.25.0              # Async HTTP client for Ollama
+openai>=1.0.0              # OpenAI API (optional fallback)
 
 # Streaming (optional for future)
 sse-starlette>=1.8.2       # Server-sent events for streaming
+
+# PDF Processing
+pdfplumber>=0.10.0         # PDF text extraction
+
+# Knowledge Graph (Neo4j)
+neo4j>=5.14.0              # Neo4j Python driver
+
+# Embeddings & Vector Search
+sentence-transformers>=2.2.0  # Local embedding models
+numpy>=1.24.0              # Numerical operations

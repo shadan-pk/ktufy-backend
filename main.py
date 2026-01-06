@@ -10,6 +10,7 @@ import os
 # Import routers
 from routers import auth as auth_router
 from routers import chat as chat_router
+from routers import admin as admin_router
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +27,7 @@ app = FastAPI(
 # Include routers
 app.include_router(auth_router.router)
 app.include_router(chat_router.router)
+app.include_router(admin_router.router)
 
 # Configure CORS
 app.add_middleware(
@@ -57,15 +59,30 @@ async def health_check():
     """
     Detailed health check endpoint
     """
+    # Check Neo4j connection
+    try:
+        from services.neo4j_service import neo4j_service
+        neo4j_status = "operational" if neo4j_service.is_connected() else "not_connected"
+    except:
+        neo4j_status = "not_configured"
+    
+    # Check embedding service
+    try:
+        from services.embedding_service import embedding_service
+        embedding_status = "operational" if embedding_service.is_ready() else "not_ready"
+    except:
+        embedding_status = "not_configured"
+    
     return {
         "status": "healthy",
         "environment": os.getenv("ENVIRONMENT", "development"),
         "services": {
             "api": "operational",
-            "authentication": "operational",  # Phase 2 complete!
-            "database": "not_configured",     # Will update in Phase 3
-            "vector_db": "not_configured",    # Will update in Phase 5
-            "storage": "not_configured"       # Will update in Phase 3
+            "authentication": "operational",
+            "database": "operational",
+            "neo4j_kg": neo4j_status,
+            "embeddings": embedding_status,
+            "storage": "operational"
         }
     }
 
@@ -80,11 +97,12 @@ async def api_status():
         "api_version": "v1",
         "status": "active",
         "features": {
-            "authentication": "operational",      # ✅ Phase 2 complete
+            "authentication": "operational",
             "notes_upload": "pending",
-            "kg_rag": "pending",
+            "kg_rag": "operational",
             "content_generation": "pending",
-            "progress_tracking": "pending"
+            "progress_tracking": "pending",
+            "admin_dashboard": "operational"
         }
     }
 
