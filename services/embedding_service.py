@@ -177,18 +177,30 @@ Keywords: {', '.join(keywords)}"""
         # Generate embedding
         embedding = self.generate_embedding(content)
         
-        # Store with metadata
+        # Create canonical IDs
+        subject_code = subject.get("code", "").replace(" ", "_").upper()
+        module_num = module.get("number", 0)
+        topic_slug = topic["name"][:30].lower().replace(" ", "_").replace("-", "_")
+        
+        chunk_id = f"{subject_code}_m{module_num}_{topic_slug}"
+        module_id = f"{subject_code}_m{module_num}"
+        topic_id = chunk_id
+        
+        # Store with V2 schema metadata (no keywords column)
         return self.store_embedding(
             supabase_client=supabase_client,
             content=content,
             embedding=embedding,
             metadata={
+                "chunk_id": chunk_id,
+                "chunk_type": "topic_detail",
                 "subject_code": subject["code"],
                 "subject_name": subject["name"],
+                "module_id": module_id,
                 "module_number": module.get("number"),
                 "module_name": module.get("name"),
+                "topic_id": topic_id,
                 "topic_name": topic["name"],
-                "keywords": topic.get("keywords", []),
                 "semester": semester,
                 "branch": branch,
                 "regulation": regulation
@@ -313,6 +325,11 @@ Keywords: {', '.join(keywords)}"""
         regulation = syllabus_data.get("regulation", "2019")
         
         for subject in syllabus_data.get("subjects", []):
+            # Skip subjects without code
+            if not subject.get("code"):
+                logger.warning(f"Skipping subject without code: {subject.get('name', 'unknown')}")
+                continue
+                
             for module in subject.get("modules", []):
                 for topic in module.get("topics", []):
                     try:

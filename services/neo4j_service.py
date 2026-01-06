@@ -360,43 +360,52 @@ class Neo4jService:
                 print(f"      📊 Neo4j data: {counts['topics']} topics, {counts['modules']} modules, {counts['subjects']} subjects")
         
         # Search across Topic, Module, and Subject nodes using keywords
-        # Match if ANY keyword is found in the name/description
+        # Simplified query to avoid nested aggregation issues
         cypher = """
-        // Search Topics - match any keyword
+        // Search Topics with their parent module and subject
         OPTIONAL MATCH (t:Topic)
         WHERE any(kw IN $keywords WHERE toLower(t.name) CONTAINS kw)
            OR any(kw IN $keywords WHERE any(k IN t.keywords WHERE toLower(k) CONTAINS kw))
+        OPTIONAL MATCH (m:Module)-[:CONTAINS]->(t)
+        OPTIONAL MATCH (s:Subject)-[:HAS_MODULE]->(m)
         WITH collect(DISTINCT {
             canonical_id: t.id,
             name: t.name,
             type: 'Topic',
             description: t.description,
-            keywords: t.keywords
+            keywords: t.keywords,
+            module_name: m.name,
+            module_number: m.number,
+            subject_name: s.name,
+            subject_code: s.code
         }) as topics
         
-        // Search Modules - match any keyword or module number
-        OPTIONAL MATCH (m:Module)
-        WHERE any(kw IN $keywords WHERE toLower(m.name) CONTAINS kw)
-           OR any(kw IN $keywords WHERE toLower(coalesce(m.description, '')) CONTAINS kw)
-           OR any(kw IN $keywords WHERE kw =~ '\\\\d+' AND m.number = toInteger(kw))
+        // Search Modules with their parent subject
+        OPTIONAL MATCH (m2:Module)
+        WHERE any(kw IN $keywords WHERE toLower(m2.name) CONTAINS kw)
+           OR any(kw IN $keywords WHERE toLower(coalesce(m2.description, '')) CONTAINS kw)
+           OR any(kw IN $keywords WHERE kw =~ '\\\\d+' AND m2.number = toInteger(kw))
+        OPTIONAL MATCH (s2:Subject)-[:HAS_MODULE]->(m2)
         WITH topics, collect(DISTINCT {
-            canonical_id: m.id,
-            name: m.name,
+            canonical_id: m2.id,
+            name: m2.name,
             type: 'Module',
-            description: m.description,
-            keywords: []
+            description: m2.description,
+            module_number: m2.number,
+            subject_name: s2.name,
+            subject_code: s2.code
         }) as modules
         
-        // Search Subjects - match any keyword
-        OPTIONAL MATCH (s:Subject)
-        WHERE any(kw IN $keywords WHERE toLower(s.name) CONTAINS kw)
-           OR any(kw IN $keywords WHERE toLower(s.code) CONTAINS kw)
+        // Search Subjects
+        OPTIONAL MATCH (s3:Subject)
+        WHERE any(kw IN $keywords WHERE toLower(s3.name) CONTAINS kw)
+           OR any(kw IN $keywords WHERE toLower(s3.code) CONTAINS kw)
         WITH topics, modules, collect(DISTINCT {
-            canonical_id: s.code,
-            name: s.name,
+            canonical_id: s3.code,
+            name: s3.name,
             type: 'Subject',
-            description: coalesce(s.description, ''),
-            keywords: []
+            description: coalesce(s3.description, ''),
+            subject_code: s3.code
         }) as subjects
         
         // Combine all results
@@ -671,6 +680,14 @@ class Neo4jService:
         
         for subject in data.get("subjects", []):
             try:
+                # Validate subject has required fields
+                subject_code = subject.get("code")
+                if not subject_code:
+                    error_msg = f"Skipping subject with missing code: {subject.get('name', 'unknown')}"
+                    logger.warning(error_msg)
+                    stats["errors"].append(error_msg)
+                    continue
+                
                 # Add semester and branch from parent
                 subject["semester"] = data.get("semester", subject.get("semester", 0))
                 subject["branch"] = data.get("branch", subject.get("branch", ""))
@@ -681,12 +698,12 @@ class Neo4jService:
                 
                 # Create modules
                 for module in subject.get("modules", []):
-                    module_result = self.create_module(module, subject["code"])
+                    module_result = self.create_module(module, subject_code)
                     if module_result:
                         stats["modules_created"] += 1
                         
                         # Create topics
-                        module_id = f"{subject['code']}_M{module['number']}"
+                        module_id = f"{subject_code}_M{module['number']}"
                         for topic in module.get("topics", []):
                             topic_result = self.create_topic(topic, module_id)
                             if topic_result:

@@ -164,37 +164,71 @@ class ChatService:
         if kg_results:
             parts.append("=== KNOWLEDGE GRAPH CONTEXT ===")
             for i, concept in enumerate(kg_results[:3], 1):
-                parts.append(f"\n**Concept {i}: {concept.get('name', 'Unknown')}**")
-                if concept.get("subject_name"):
+                concept_type = concept.get('type', 'Concept')
+                concept_name = concept.get('name', 'Unknown')
+                
+                # Build header with hierarchy info
+                header = f"**{concept_type}: {concept_name}**"
+                if concept.get("subject_code"):
+                    header = f"**{concept_type}: {concept_name}** (Subject: {concept.get('subject_code')})"
+                if concept.get("module_number"):
+                    header += f" [Module {concept.get('module_number')}]"
+                    
+                parts.append(f"\n{header}")
+                
+                # Subject info
+                if concept.get("subject_name") and concept_type != 'Subject':
                     parts.append(f"Subject: {concept.get('subject_name')}")
-                if concept.get("module_name"):
+                
+                # Module info for topics
+                if concept.get("module_name") and concept_type == 'Topic':
                     parts.append(f"Module: {concept.get('module_name')}")
+                
                 if concept.get("description"):
                     parts.append(f"Description: {concept.get('description')}")
                 
-                # Prerequisites
-                prereqs = concept.get("prerequisites", [])
-                if prereqs:
-                    prereq_names = [p.get("name", "") for p in prereqs if p.get("name")]
-                    if prereq_names:
-                        parts.append(f"Prerequisites: {', '.join(prereq_names)}")
+                # Show topics for modules
+                if concept_type == 'Module' and concept.get("topics"):
+                    topic_list = [t for t in concept.get("topics", []) if t]
+                    if topic_list:
+                        parts.append(f"Topics: {', '.join(topic_list[:5])}")
                 
-                # Related concepts
-                rels = concept.get("relationships", [])
-                if rels:
-                    for rel in rels[:3]:
-                        parts.append(f"  - {rel.get('type', 'RELATED')}: {rel.get('target_name', '')}")
+                # Show modules for subjects
+                if concept_type == 'Subject' and concept.get("modules"):
+                    module_list = concept.get("modules", [])
+                    if module_list:
+                        mod_names = [f"M{m.get('number', '?')}: {m.get('name', '')}" for m in module_list if m.get('name')]
+                        if mod_names:
+                            parts.append(f"Modules: {', '.join(mod_names[:5])}")
+                
+                # Show keywords if available
+                keywords = concept.get("keywords", [])
+                if keywords and any(keywords):
+                    parts.append(f"Keywords: {', '.join([k for k in keywords if k][:5])}")
         
         # Format Vector Store results
         vector_results = context.get("vector_results", [])
         if vector_results:
             parts.append("\n=== SYLLABUS CONTENT ===")
-            for i, result in enumerate(vector_results[:3], 1):
-                parts.append(f"\n**Source {i}:** {result.get('subject_name', '')} - {result.get('module_name', '')}")
+            for i, result in enumerate(vector_results[:5], 1):
+                subject = result.get('subject_name', '') or result.get('subject_code', '')
+                module_num = result.get('module_number', '')
+                module_name = result.get('module_name', '')
+                topic = result.get('topic_name', '')
+                
+                header = f"**Source {i}:** {subject}"
+                if module_num:
+                    header += f" - Module {module_num}"
+                if module_name:
+                    header += f": {module_name}"
+                if topic:
+                    header += f" - Topic: {topic}"
+                    
+                parts.append(f"\n{header}")
                 content = result.get("content", "")
                 # Truncate long content
-                if len(content) > 500:
-                    content = content[:500] + "..."
+                if len(content) > 800:
+                    content = content[:800] + "..."
                 parts.append(content)
         
         return "\n".join(parts)
@@ -242,6 +276,10 @@ class ChatService:
         
         # Format context for prompt
         context_str = self.format_context_for_prompt(context)
+        
+        # Debug: Show formatted context (first 500 chars)
+        if context_str:
+            print(f"   📝 Context preview: {context_str[:500]}...")
         
         # Build messages
         messages = [{"role": "system", "content": self.get_rag_system_prompt(context_str)}]
