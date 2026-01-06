@@ -332,6 +332,164 @@ class Neo4jService:
                 topics.append(topic)
             return topics
     
+    def search_concepts(self, query: str, limit: int = 10) -> List[dict]:
+        """
+        Search concepts across the knowledge graph (topics, modules, subjects).
+        Returns results with canonical_id for relationship lookups.
+        """
+        if not self.driver:
+            raise ConnectionError("Neo4j not connected")
+        
+        # Search across Topic, Module, and Subject nodes
+        cypher = """
+        // Search Topics
+        OPTIONAL MATCH (t:Topic)
+        WHERE toLower(t.name) CONTAINS toLower($search_term)
+           OR any(k IN t.keywords WHERE toLower(k) CONTAINS toLower($search_term))
+        WITH collect({
+            canonical_id: t.id,
+            name: t.name,
+            type: 'Topic',
+            description: t.description,
+            keywords: t.keywords
+        }) as topics
+        
+        // Search Modules
+        OPTIONAL MATCH (m:Module)
+        WHERE toLower(m.name) CONTAINS toLower($search_term)
+           OR toLower(m.description) CONTAINS toLower($search_term)
+        WITH topics, collect({
+            canonical_id: m.id,
+            name: m.name,
+            type: 'Module',
+            description: m.description,
+            keywords: []
+        }) as modules
+        
+        // Search Subjects
+        OPTIONAL MATCH (s:Subject)
+        WHERE toLower(s.name) CONTAINS toLower($search_term)
+           OR toLower(s.code) CONTAINS toLower($search_term)
+        WITH topics, modules, collect({
+            canonical_id: s.code,
+            name: s.name,
+            type: 'Subject',
+            description: coalesce(s.description, ''),
+            keywords: []
+        }) as subjects
+        
+        // Combine all results
+        RETURN topics + modules + subjects as results
+        """
+        
+        with self.driver.session() as session:
+            result = session.run(cypher, search_term=query)
+            record = result.single()
+            if record:
+                # Filter out null results and limit
+                results = [r for r in record["results"] if r.get("canonical_id")]
+                return results[:limit]
+            return []
+    
+    def get_concept_relationships(self, concept_id: str) -> List[dict]:
+        """
+        Get all relationships for a concept (topic, module, or subject).
+        Returns related concepts with relationship type.
+        """
+        if not self.driver:
+            raise ConnectionError("Neo4j not connected")
+        
+        cypher = """
+        // Try to find the node by ID across different node types
+        OPTIONAL MATCH (t:Topic {id: $concept_id})
+        OPTIONAL MATCH (m:Module {id: $concept_id})
+        OPTIONAL MATCH (s:Subject {code: $concept_id})
+        
+        WITH coalesce(t, m, s) as node
+        WHERE node IS NOT NULL
+        
+        // Get all outgoing relationships
+        OPTIONAL MATCH (node)-[r]->(related)
+        WHERE related:Topic OR related:Module OR related:Subject
+        
+        WITH collect({
+            related_id: coalesce(related.id, related.code),
+            related_name: related.name,
+            related_type: labels(related)[0],
+            relationship: type(r),
+            direction: 'outgoing'
+        }) as outgoing
+        
+        // Get all incoming relationships
+        OPTIONAL MATCH (node)<-[r]-(related)
+        WHERE related:Topic OR related:Module OR related:Subject
+        
+        WITH outgoing, collect({
+            related_id: coalesce(related.id, related.code),
+            related_name: related.name,
+            related_type: labels(related)[0],
+            relationship: type(r),
+            direction: 'incoming'
+        }) as incoming
+        
+        RETURN outgoing + incoming as relationships
+        """
+        
+        with self.driver.session() as session:
+            result = session.run(cypher, concept_id=concept_id)
+            record = result.single()
+            if record:
+                # Filter out null relationships
+                relationships = [r for r in record["relationships"] if r.get("related_id")]
+                return relationships
+            return []
+    
+    def get_topic_prerequisites(self, topic_id: str) -> List[dict]:
+        """
+        Get prerequisites for a topic (concepts that should be learned first).
+        Falls back to module/subject prerequisites if topic-level not found.
+        """
+        if not self.driver:
+            raise ConnectionError("Neo4j not connected")
+        
+        cypher = """
+        // Find the topic
+        MATCH (t:Topic {id: $topic_id})
+        
+        // Get the module and subject for context
+        OPTIONAL MATCH (m:Module)-[:CONTAINS]->(t)
+        OPTIONAL MATCH (s:Subject)-[:HAS_MODULE]->(m)
+        
+        // Look for direct topic prerequisites
+        OPTIONAL MATCH (prereq_topic:Topic)-[:PREREQUISITE_OF]->(t)
+        
+        // Look for subject prerequisites
+        OPTIONAL MATCH (prereq_subject:Subject)-[:PREREQUISITE_OF]->(s)
+        
+        WITH collect(DISTINCT {
+            id: prereq_topic.id,
+            name: prereq_topic.name,
+            type: 'Topic',
+            reason: null
+        }) as topic_prereqs,
+        collect(DISTINCT {
+            id: prereq_subject.code,
+            name: prereq_subject.name,
+            type: 'Subject',
+            reason: null
+        }) as subject_prereqs
+        
+        RETURN topic_prereqs + subject_prereqs as prerequisites
+        """
+        
+        with self.driver.session() as session:
+            result = session.run(cypher, topic_id=topic_id)
+            record = result.single()
+            if record:
+                prereqs = [p for p in record["prerequisites"] if p.get("id")]
+                return prereqs
+            return []
+    
     # ═══════════════════════════════════════════════════════════════════════
     # Relationship Operations
     # ═══════════════════════════════════════════════════════════════════════

@@ -87,9 +87,16 @@ class ChatService:
                     # For each concept, get additional context
                     for concept in kg_results[:3]:
                         concept_id = concept.get("canonical_id")
+                        concept_type = concept.get("type", "Topic")
+                        
                         if concept_id:
-                            # Get prerequisites
-                            prereqs = neo4j_service.get_prerequisites(concept_id)
+                            # Get prerequisites based on concept type
+                            if concept_type == "Topic":
+                                prereqs = neo4j_service.get_topic_prerequisites(concept_id)
+                            elif concept_type == "Subject":
+                                prereqs = neo4j_service.get_prerequisites(concept_id)
+                            else:
+                                prereqs = []
                             concept["prerequisites"] = prereqs[:3] if prereqs else []
                             
                             # Get related concepts
@@ -101,21 +108,13 @@ class ChatService:
             # Fetch from Vector Store
             if query_type in [QueryType.VECTOR_ONLY, QueryType.VECTOR_THEN_KG, QueryType.HYBRID]:
                 if embedding_service.is_ready() and supabase_admin_client:
-                    # Determine chunk types based on query
-                    chunk_types = None
-                    if "syllabus" in query.lower() or "topics" in query.lower():
-                        chunk_types = ["syllabus_content", "topic_list"]
-                    elif "explain" in query.lower() or "what is" in query.lower():
-                        chunk_types = ["topic_detail", "syllabus_content"]
-                    
                     vector_results = embedding_service.search_similar(
                         supabase_client=supabase_admin_client,
                         query=query,
                         limit=5,
                         semester=semester,
                         branch=branch,
-                        subject_code=subject_code,
-                        chunk_types=chunk_types
+                        subject_code=subject_code
                     )
                     context["vector_results"] = vector_results
             
