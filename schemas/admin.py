@@ -102,6 +102,7 @@ class SubjectCreate(SubjectBase):
     """Create subject with modules"""
     semester: int
     branch: str
+    regulation: str = Field(default="2019", description="KTU regulation year (2019, 2024, etc.)")
     modules: List[ModuleBase] = []
     textbooks: List[str] = []
     objectives: List[str] = []
@@ -112,6 +113,7 @@ class SubjectResponse(SubjectBase):
     id: str
     semester: int
     branch: str
+    regulation: str = "2019"
     modules: List[ModuleResponse] = []
     textbooks: List[str] = []
     objectives: List[str] = []
@@ -125,6 +127,7 @@ class SubjectListResponse(BaseModel):
     total: int
     semester: Optional[int] = None
     branch: Optional[str] = None
+    regulation: Optional[str] = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -139,6 +142,7 @@ class KnowledgeGraphStats(BaseModel):
     total_relationships: int
     branches: List[str]
     semesters: List[int]
+    regulations: List[str] = []
     last_updated: Optional[datetime] = None
 
 

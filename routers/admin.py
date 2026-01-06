@@ -74,6 +74,7 @@ async def get_statistics():
             total_relationships=kg_stats.get("total_relationships", 0),
             branches=kg_stats.get("branches", []),
             semesters=kg_stats.get("semesters", []),
+            regulations=kg_stats.get("regulations", []),
             last_updated=None
         ),
         embeddings=EmbeddingStats(
@@ -129,7 +130,7 @@ async def upload_syllabus(
     # Process in background
     background_tasks.add_task(
         process_syllabus_background,
-        file_path, semester, branch, job.job_id
+        file_path, semester, branch, job.job_id, regulation
     )
     
     return SyllabusUploadResponse(
@@ -143,7 +144,7 @@ async def upload_syllabus(
     )
 
 
-async def process_syllabus_background(file_path: str, semester: int, branch: str, job_id: str):
+async def process_syllabus_background(file_path: str, semester: int, branch: str, job_id: str, regulation: str = "2019"):
     """Background task to process syllabus"""
     job = syllabus_processor.get_job(job_id)
     if job:
@@ -152,7 +153,8 @@ async def process_syllabus_background(file_path: str, semester: int, branch: str
             semester=semester,
             branch=branch,
             job=job,
-            supabase_client=supabase_admin_client
+            supabase_client=supabase_admin_client,
+            regulation=regulation
         )
 
 
@@ -195,7 +197,8 @@ async def get_job_status(job_id: str):
 @router.get("/subjects", summary="List all subjects")
 async def list_subjects(
     semester: Optional[int] = Query(None, ge=1, le=8, description="Filter by semester"),
-    branch: Optional[str] = Query(None, description="Filter by branch")
+    branch: Optional[str] = Query(None, description="Filter by branch"),
+    regulation: Optional[str] = Query(None, description="Filter by regulation (2019, 2024, etc.)")
 ):
     """
     Get all subjects from the knowledge graph
@@ -203,12 +206,12 @@ async def list_subjects(
     if not neo4j_service.is_connected():
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     
-    subjects = neo4j_service.get_all_subjects(semester=semester, branch=branch)
+    subjects = neo4j_service.get_all_subjects(semester=semester, branch=branch, regulation=regulation)
     
     return {
         "subjects": subjects,
         "total": len(subjects),
-        "filters": {"semester": semester, "branch": branch}
+        "filters": {"semester": semester, "branch": branch, "regulation": regulation}
     }
 
 

@@ -399,9 +399,15 @@
                                     <span class="text-secondary">Loading...</span>
                                 </div>
                             </div>
-                            <div>
+                            <div class="mb-3">
                                 <label class="text-secondary small mb-2">Semesters with Data</label>
                                 <div id="semesters-list">
+                                    <span class="text-secondary">Loading...</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-secondary small mb-2">Regulations</label>
+                                <div id="regulations-list">
                                     <span class="text-secondary">Loading...</span>
                                 </div>
                             </div>
@@ -528,7 +534,7 @@
             <div class="card mb-4">
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <select class="form-select" id="filter-branch" onchange="loadSubjects()">
                                 <option value="">All Branches</option>
                                 <option value="CSE">CSE</option>
@@ -538,7 +544,7 @@
                                 <option value="CE">CE</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <select class="form-select" id="filter-semester" onchange="loadSubjects()">
                                 <option value="">All Semesters</option>
                                 <option value="1">Semester 1</option>
@@ -551,7 +557,15 @@
                                 <option value="8">Semester 8</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <select class="form-select" id="filter-regulation" onchange="loadSubjects()">
+                                <option value="">All Regulations</option>
+                                <option value="2019">2019 Scheme</option>
+                                <option value="2021">2021 Scheme</option>
+                                <option value="2024">2024 Scheme</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
                             <div class="search-box">
                                 <i class="bi bi-search"></i>
                                 <input type="text" class="form-control" placeholder="Search subjects..." id="search-subject" onkeyup="filterSubjects()">
@@ -738,6 +752,14 @@
                                     <option value="EEE">EEE</option>
                                     <option value="ME">ME</option>
                                     <option value="CE">CE</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Regulation *</label>
+                                <select class="form-select" id="subject-regulation" required>
+                                    <option value="2019">2019</option>
+                                    <option value="2021">2021</option>
+                                    <option value="2024">2024</option>
                                 </select>
                             </div>
                             <div class="col-md-3">

@@ -103,6 +103,12 @@ async function refreshStats() {
         document.getElementById('semesters-list').innerHTML = semesters.length > 0
             ? semesters.map(s => `<span class="badge bg-success me-1">S${s}</span>`).join('')
             : '<span class="text-secondary">No data yet</span>';
+        
+        // Update regulations list
+        const regulations = data.knowledge_graph?.regulations || [];
+        document.getElementById('regulations-list').innerHTML = regulations.length > 0
+            ? regulations.map(r => `<span class="badge bg-info me-1">${r}</span>`).join('')
+            : '<span class="text-secondary">No data yet</span>';
             
         showToast('Statistics refreshed', 'success');
         
@@ -301,10 +307,12 @@ async function loadSubjects() {
     try {
         const branch = document.getElementById('filter-branch').value;
         const semester = document.getElementById('filter-semester').value;
+        const regulation = document.getElementById('filter-regulation').value;
         
         let url = `${API_BASE}/subjects?`;
         if (branch) url += `branch=${branch}&`;
-        if (semester) url += `semester=${semester}`;
+        if (semester) url += `semester=${semester}&`;
+        if (regulation) url += `regulation=${regulation}`;
         
         const response = await fetch(url);
         const data = await response.json();
@@ -329,11 +337,14 @@ function renderSubjects(subjects) {
     
     grid.innerHTML = subjects.map(subject => `
         <div class="col-md-4">
-            <div class="card subject-card h-100" onclick="showSubjectDetails('${subject.code}')">
+            <div class="card subject-card h-100" onclick="showSubjectDetails('${subject.code}', '${subject.regulation || '2019'}')">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <span class="badge bg-primary">${subject.code}</span>
-                        <span class="module-badge">${subject.module_count || 0} modules</span>
+                        <div>
+                            <span class="badge bg-secondary me-1">${subject.regulation || '2019'}</span>
+                            <span class="module-badge">${subject.module_count || 0} modules</span>
+                        </div>
                     </div>
                     <h5 class="card-title">${subject.name}</h5>
                     <div class="text-secondary small">
@@ -356,14 +367,14 @@ function filterSubjects() {
     renderSubjects(filtered);
 }
 
-async function showSubjectDetails(code) {
+async function showSubjectDetails(code, regulation = '2019') {
     const modal = new bootstrap.Modal(document.getElementById('subjectDetailsModal'));
-    document.getElementById('subject-detail-title').textContent = `Subject: ${code}`;
+    document.getElementById('subject-detail-title').textContent = `Subject: ${code} (${regulation} Scheme)`;
     document.getElementById('subject-detail-content').innerHTML = 'Loading...';
     modal.show();
     
     try {
-        const response = await fetch(`${API_BASE}/subjects/${code}`);
+        const response = await fetch(`${API_BASE}/subjects/${code}?regulation=${regulation}`);
         const subject = await response.json();
         
         let modulesHtml = '';
@@ -405,10 +416,11 @@ async function showSubjectDetails(code) {
                             <p><strong>Credits:</strong> ${subject.credits}</p>
                             <p><strong>Semester:</strong> S${subject.semester}</p>
                             <p><strong>Branch:</strong> ${subject.branch}</p>
+                            <p><strong>Regulation:</strong> ${subject.regulation || '2019'}</p>
                             <p><strong>Category:</strong> ${subject.category || 'N/A'}</p>
                             
                             <hr>
-                            <button class="btn btn-sm btn-outline-danger w-100" onclick="deleteSubject('${subject.code}')">
+                            <button class="btn btn-sm btn-outline-danger w-100" onclick="deleteSubject('${subject.code}', '${subject.regulation || '2019'}')">
                                 <i class="bi bi-trash me-2"></i> Delete Subject
                             </button>
                         </div>
@@ -434,6 +446,7 @@ async function addSubject() {
         credits: parseInt(document.getElementById('subject-credits').value),
         semester: parseInt(document.getElementById('subject-semester').value),
         branch: document.getElementById('subject-branch').value,
+        regulation: document.getElementById('subject-regulation').value,
         category: document.getElementById('subject-category').value,
         modules: [],
         textbooks: [],
@@ -462,11 +475,11 @@ async function addSubject() {
     }
 }
 
-async function deleteSubject(code) {
-    if (!confirm(`Delete subject "${code}" and all its modules/topics?`)) return;
+async function deleteSubject(code, regulation = '2019') {
+    if (!confirm(`Delete subject "${code}" (${regulation} scheme) and all its modules/topics?`)) return;
     
     try {
-        const response = await fetch(`${API_BASE}/subjects/${code}`, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE}/subjects/${code}?regulation=${regulation}`, { method: 'DELETE' });
         if (response.ok) {
             showToast('Subject deleted', 'success');
             bootstrap.Modal.getInstance(document.getElementById('subjectDetailsModal')).hide();

@@ -141,7 +141,8 @@ Keywords: {', '.join(keywords)}"""
         module: dict,
         subject: dict,
         semester: int,
-        branch: str
+        branch: str,
+        regulation: str = "2019"
     ) -> dict:
         """
         Store embedding for a topic
@@ -153,6 +154,7 @@ Keywords: {', '.join(keywords)}"""
             subject: Subject data
             semester: Semester number
             branch: Branch code
+            regulation: KTU regulation year
             
         Returns:
             Created record
@@ -183,7 +185,8 @@ Keywords: {', '.join(keywords)}"""
                 "topic_name": topic["name"],
                 "keywords": topic.get("keywords", []),
                 "semester": semester,
-                "branch": branch
+                "branch": branch,
+                "regulation": regulation
             }
         )
     
@@ -286,6 +289,7 @@ Keywords: {', '.join(keywords)}"""
         
         semester = syllabus_data.get("semester", 0)
         branch = syllabus_data.get("branch", "")
+        regulation = syllabus_data.get("regulation", "2019")
         
         for subject in syllabus_data.get("subjects", []):
             for module in subject.get("modules", []):
@@ -297,7 +301,8 @@ Keywords: {', '.join(keywords)}"""
                             module=module,
                             subject=subject,
                             semester=semester,
-                            branch=branch
+                            branch=branch,
+                            regulation=regulation
                         )
                         stats["embeddings_created"] += 1
                     except Exception as e:

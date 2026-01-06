@@ -68,11 +68,13 @@ class Neo4jService:
             raise ConnectionError("Neo4j not connected")
         
         constraints = [
-            "CREATE CONSTRAINT subject_code IF NOT EXISTS FOR (s:Subject) REQUIRE s.code IS UNIQUE",
+            # Composite unique constraint: same subject code can exist in different regulations
+            "CREATE CONSTRAINT subject_code_regulation IF NOT EXISTS FOR (s:Subject) REQUIRE (s.code, s.regulation) IS UNIQUE",
             "CREATE CONSTRAINT module_id IF NOT EXISTS FOR (m:Module) REQUIRE m.id IS UNIQUE",
             "CREATE CONSTRAINT topic_id IF NOT EXISTS FOR (t:Topic) REQUIRE t.id IS UNIQUE",
             "CREATE INDEX subject_semester IF NOT EXISTS FOR (s:Subject) ON (s.semester)",
             "CREATE INDEX subject_branch IF NOT EXISTS FOR (s:Subject) ON (s.branch)",
+            "CREATE INDEX subject_regulation IF NOT EXISTS FOR (s:Subject) ON (s.regulation)",
         ]
         
         with self.driver.session() as session:
@@ -101,12 +103,13 @@ class Neo4jService:
             raise ConnectionError("Neo4j not connected")
         
         query = """
-        MERGE (s:Subject {code: $code})
+        MERGE (s:Subject {code: $code, regulation: $regulation})
         SET s.name = $name,
             s.credits = $credits,
             s.category = $category,
             s.semester = $semester,
             s.branch = $branch,
+            s.regulation = $regulation,
             s.textbooks = $textbooks,
             s.objectives = $objectives,
             s.updated_at = datetime()
@@ -122,6 +125,7 @@ class Neo4jService:
                 category=subject_data.get("category", ""),
                 semester=subject_data.get("semester", 0),
                 branch=subject_data.get("branch", ""),
+                regulation=subject_data.get("regulation", "2019"),
                 textbooks=subject_data.get("textbooks", []),
                 objectives=subject_data.get("objectives", [])
             )
@@ -155,9 +159,10 @@ class Neo4jService:
     def get_all_subjects(
         self, 
         semester: Optional[int] = None, 
-        branch: Optional[str] = None
+        branch: Optional[str] = None,
+        regulation: Optional[str] = None
     ) -> List[dict]:
-        """Get all subjects, optionally filtered"""
+        """Get all subjects, optionally filtered by semester, branch, and regulation"""
         if not self.driver:
             raise ConnectionError("Neo4j not connected")
         
@@ -170,6 +175,9 @@ class Neo4jService:
         if branch:
             conditions.append("s.branch = $branch")
             params["branch"] = branch
+        if regulation:
+            conditions.append("s.regulation = $regulation")
+            params["regulation"] = regulation
         
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         
@@ -414,7 +422,8 @@ class Neo4jService:
                 "total_topics": 0,
                 "total_relationships": 0,
                 "branches": [],
-                "semesters": []
+                "semesters": [],
+                "regulations": []
             }
         
         query = """
@@ -424,8 +433,9 @@ class Neo4jService:
         MATCH ()-[r]->() WITH subjects, modules, topics, count(r) as rels
         MATCH (s2:Subject) WITH subjects, modules, topics, rels, 
               collect(DISTINCT s2.branch) as branches,
-              collect(DISTINCT s2.semester) as semesters
-        RETURN subjects, modules, topics, rels, branches, semesters
+              collect(DISTINCT s2.semester) as semesters,
+              collect(DISTINCT s2.regulation) as regulations
+        RETURN subjects, modules, topics, rels, branches, semesters, regulations
         """
         
         try:
@@ -441,7 +451,8 @@ class Neo4jService:
                         "total_topics": record["topics"],
                         "total_relationships": record["rels"],
                         "branches": [b for b in record["branches"] if b],
-                        "semesters": sorted([s for s in record["semesters"] if s])
+                        "semesters": sorted([s for s in record["semesters"] if s]),
+                        "regulations": sorted([r for r in record["regulations"] if r])
                     }
         except Exception as e:
             logger.error(f"Error getting statistics: {e}")
@@ -453,7 +464,8 @@ class Neo4jService:
             "total_topics": 0,
             "total_relationships": 0,
             "branches": [],
-            "semesters": []
+            "semesters": [],
+            "regulations": []
         }
     
     # ═══════════════════════════════════════════════════════════════════════

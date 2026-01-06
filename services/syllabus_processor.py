@@ -93,7 +93,8 @@ class SyllabusProcessor:
         semester: int,
         branch: str,
         job: Optional[ProcessingJob] = None,
-        supabase_client=None
+        supabase_client=None,
+        regulation: str = "2019"
     ) -> dict:
         """
         Process a syllabus PDF end-to-end
@@ -104,6 +105,7 @@ class SyllabusProcessor:
             branch: Branch code
             job: Optional job to track progress
             supabase_client: Supabase client for embeddings
+            regulation: KTU regulation year (2019, 2024, etc.)
             
         Returns:
             Processing results
@@ -158,6 +160,11 @@ class SyllabusProcessor:
                 "subjects_found": subjects_count,
                 "status": "success"
             }
+            
+            # Add regulation to structured data
+            structured_data["regulation"] = regulation
+            for subject in structured_data.get("subjects", []):
+                subject["regulation"] = regulation
             
             if job:
                 job.total_subjects = subjects_count
