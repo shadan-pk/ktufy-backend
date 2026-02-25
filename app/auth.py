@@ -9,7 +9,7 @@ from typing import Optional
 import httpx
 
 from app.config import settings
-from utils.supabase_client import supabase_client
+from utils.supabase_client import supabase_admin_client
 
 
 # Security scheme for Bearer token
@@ -45,7 +45,7 @@ async def verify_supabase_token(token: str) -> dict:
     """
     try:
         # Verify token with Supabase
-        response = supabase_client.auth.get_user(token)
+        response = supabase_admin_client.auth.get_user(token)
         
         if not response or not response.user:
             raise HTTPException(
