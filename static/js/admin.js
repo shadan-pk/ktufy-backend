@@ -6,6 +6,132 @@ const API_BASE = '/api/v1/admin';
 let activeUsersIntervalId = null;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Custom Select Dropdown Component
+// Replaces native <select> with styled Shadcn-like dropdown
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class CustomSelect {
+    constructor(wrapper) {
+        this.wrapper = wrapper;
+        this.nativeSelect = wrapper.querySelector('select');
+        if (!this.nativeSelect) return;
+
+        this.onchangeFn = wrapper.dataset.onchange || null;
+        this.options = Array.from(this.nativeSelect.options);
+        this.isOpen = false;
+
+        this.build();
+        this.bindEvents();
+    }
+
+    build() {
+        // Create trigger button
+        this.trigger = document.createElement('button');
+        this.trigger.type = 'button';
+        this.trigger.className = 'custom-select-trigger';
+
+        const selected = this.options.find(o => o.selected) || this.options[0];
+        const isPlaceholder = !selected.value;
+
+        this.trigger.innerHTML = `
+            <span class="trigger-text ${isPlaceholder ? 'placeholder' : ''}">${selected.text}</span>
+            <svg class="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        `;
+
+        // Create dropdown list
+        this.dropdown = document.createElement('div');
+        this.dropdown.className = 'custom-select-dropdown';
+
+        this.options.forEach(opt => {
+            const item = document.createElement('div');
+            item.className = `custom-select-option${opt.selected ? ' selected' : ''}`;
+            item.dataset.value = opt.value;
+            item.innerHTML = `
+                <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                <span>${opt.text}</span>
+            `;
+            this.dropdown.appendChild(item);
+        });
+
+        // Insert into DOM
+        this.wrapper.appendChild(this.trigger);
+        this.wrapper.appendChild(this.dropdown);
+    }
+
+    bindEvents() {
+        // Toggle dropdown
+        this.trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Close all other open selects first
+            document.querySelectorAll('.custom-select.open').forEach(other => {
+                if (other !== this.wrapper) other.classList.remove('open');
+            });
+            this.isOpen = !this.isOpen;
+            this.wrapper.classList.toggle('open', this.isOpen);
+        });
+
+        // Option click
+        this.dropdown.addEventListener('click', (e) => {
+            const option = e.target.closest('.custom-select-option');
+            if (!option) return;
+
+            const value = option.dataset.value;
+            const text = option.querySelector('span').textContent;
+
+            // Update native select
+            this.nativeSelect.value = value;
+
+            // Update UI
+            const triggerText = this.trigger.querySelector('.trigger-text');
+            triggerText.textContent = text;
+            triggerText.classList.toggle('placeholder', !value);
+
+            // Update selected state
+            this.dropdown.querySelectorAll('.custom-select-option').forEach(o => o.classList.remove('selected'));
+            option.classList.add('selected');
+
+            // Close dropdown
+            this.isOpen = false;
+            this.wrapper.classList.remove('open');
+
+            // Trigger change callback
+            if (this.onchangeFn && typeof window[this.onchangeFn] === 'function') {
+                window[this.onchangeFn]();
+            }
+        });
+    }
+
+    // Programmatic value set
+    setValue(value) {
+        this.nativeSelect.value = value;
+        const opt = this.options.find(o => o.value === value);
+        if (opt) {
+            const triggerText = this.trigger.querySelector('.trigger-text');
+            triggerText.textContent = opt.text;
+            triggerText.classList.toggle('placeholder', !value);
+            this.dropdown.querySelectorAll('.custom-select-option').forEach(o => {
+                o.classList.toggle('selected', o.dataset.value === value);
+            });
+        }
+    }
+}
+
+// Close all dropdowns on outside click
+document.addEventListener('click', () => {
+    document.querySelectorAll('.custom-select.open').forEach(s => s.classList.remove('open'));
+});
+
+// Init all custom selects
+function initCustomSelects(scope = document) {
+    scope.querySelectorAll('.custom-select').forEach(wrapper => {
+        // Skip already-initialized
+        if (wrapper.querySelector('.custom-select-trigger')) return;
+        new CustomSelect(wrapper);
+    });
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Modal Helpers (replaces Bootstrap Modal)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -13,13 +139,14 @@ function openModal(id) {
     const overlay = document.getElementById(id);
     if (overlay) {
         overlay.classList.add('open');
-        // Close on overlay click
         overlay.addEventListener('click', function handler(e) {
             if (e.target === overlay) {
                 closeModal(id);
                 overlay.removeEventListener('click', handler);
             }
         });
+        // Init any custom selects inside modal
+        initCustomSelects(overlay);
     }
 }
 
@@ -28,10 +155,10 @@ function closeModal(id) {
     if (overlay) overlay.classList.remove('open');
 }
 
-// Close modals with Escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+        document.querySelectorAll('.custom-select.open').forEach(s => s.classList.remove('open'));
     }
 });
 
@@ -82,14 +209,6 @@ function showSection(sectionName) {
     // Re-render Lucide icons for dynamically injected content
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
-
-// Initialize navigation
-document.querySelectorAll('.sidebar-nav .nav-item').forEach(link => {
-    link.addEventListener('click', (e) => {
-        e.preventDefault();
-        showSection(link.dataset.section);
-    });
-});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Dashboard
@@ -169,7 +288,6 @@ async function loadSystemStatus() {
 
         const components = data.components;
 
-        // Update status dots
         document.getElementById('neo4j-status').className =
             `status-dot ${components.neo4j ? 'online' : 'offline'}`;
         document.getElementById('embedding-status').className =
@@ -187,7 +305,6 @@ async function refreshStats() {
         const response = await fetch(`${API_BASE}/stats`);
         const data = await response.json();
 
-        // Update stat cards
         document.getElementById('stat-subjects').textContent =
             data.knowledge_graph?.total_subjects || 0;
         document.getElementById('stat-modules').textContent =
@@ -197,19 +314,16 @@ async function refreshStats() {
         document.getElementById('stat-embeddings').textContent =
             data.embeddings?.total_embeddings || 0;
 
-        // Update branches list
         const branches = data.knowledge_graph?.branches || [];
         document.getElementById('branches-list').innerHTML = branches.length > 0
             ? branches.map(b => `<span class="badge badge-info" style="margin-right:4px">${b}</span>`).join('')
             : '<span class="text-muted text-sm">No data yet</span>';
 
-        // Update semesters list
         const semesters = data.knowledge_graph?.semesters || [];
         document.getElementById('semesters-list').innerHTML = semesters.length > 0
             ? semesters.map(s => `<span class="badge badge-success" style="margin-right:4px">S${s}</span>`).join('')
             : '<span class="text-muted text-sm">No data yet</span>';
 
-        // Update regulations list
         const regulations = data.knowledge_graph?.regulations || [];
         document.getElementById('regulations-list').innerHTML = regulations.length > 0
             ? regulations.map(r => `<span class="badge badge-default" style="margin-right:4px">${r}</span>`).join('')
@@ -227,101 +341,108 @@ async function refreshStats() {
 // File Upload
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
 let selectedFile = null;
 
-dropZone.addEventListener('click', () => fileInput.click());
+function initUploadZone() {
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    if (!dropZone || !fileInput) return;
 
-dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('dragover');
-});
+    dropZone.addEventListener('click', () => fileInput.click());
 
-dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('dragover');
-});
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
 
-dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('dragover');
-    const files = e.dataTransfer.files;
-    if (files.length > 0 && files[0].type === 'application/pdf') {
-        selectedFile = files[0];
-        document.getElementById('selected-file').textContent = `Selected: ${files[0].name}`;
-    } else {
-        showToast('Please select a PDF file', 'warning');
-    }
-});
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
 
-fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-        selectedFile = e.target.files[0];
-        document.getElementById('selected-file').textContent = `Selected: ${selectedFile.name}`;
-    }
-});
-
-document.getElementById('upload-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    if (!selectedFile) {
-        showToast('Please select a PDF file', 'warning');
-        return;
-    }
-
-    const branch = document.getElementById('upload-branch').value;
-    const semester = document.getElementById('upload-semester').value;
-    const regulation = document.getElementById('upload-regulation').value;
-
-    if (!branch || !semester) {
-        showToast('Please select branch and semester', 'warning');
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    formData.append('branch', branch);
-    formData.append('semester', semester);
-    formData.append('regulation', regulation);
-
-    const uploadBtn = document.getElementById('upload-btn');
-    uploadBtn.querySelector('.spinner').style.display = 'inline-block';
-    uploadBtn.querySelector('.btn-text').style.display = 'none';
-    uploadBtn.disabled = true;
-
-    try {
-        const response = await fetch(`${API_BASE}/upload`, {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-            showToast('File uploaded! Processing started...', 'success');
-            document.getElementById('upload-progress').style.display = 'block';
-
-            // Start polling for progress
-            pollJobProgress(data.id);
-
-            // Reset form
-            selectedFile = null;
-            document.getElementById('selected-file').textContent = '';
-            fileInput.value = '';
-
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].type === 'application/pdf') {
+            selectedFile = files[0];
+            document.getElementById('selected-file').textContent = `Selected: ${files[0].name}`;
         } else {
-            showToast(data.detail || 'Upload failed', 'danger');
+            showToast('Please select a PDF file', 'warning');
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            selectedFile = e.target.files[0];
+            document.getElementById('selected-file').textContent = `Selected: ${selectedFile.name}`;
+        }
+    });
+}
+
+function initUploadForm() {
+    const form = document.getElementById('upload-form');
+    if (!form) return;
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        if (!selectedFile) {
+            showToast('Please select a PDF file', 'warning');
+            return;
         }
 
-    } catch (error) {
-        console.error('Upload error:', error);
-        showToast('Upload failed: ' + error.message, 'danger');
-    } finally {
-        uploadBtn.querySelector('.spinner').style.display = 'none';
-        uploadBtn.querySelector('.btn-text').style.display = '';
-        uploadBtn.disabled = false;
-    }
-});
+        const branch = document.getElementById('upload-branch').value;
+        const semester = document.getElementById('upload-semester').value;
+        const regulation = document.getElementById('upload-regulation').value;
+
+        if (!branch || !semester) {
+            showToast('Please select branch and semester', 'warning');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('branch', branch);
+        formData.append('semester', semester);
+        formData.append('regulation', regulation);
+
+        const uploadBtn = document.getElementById('upload-btn');
+        uploadBtn.querySelector('.spinner').style.display = 'inline-block';
+        uploadBtn.querySelector('.btn-text').style.display = 'none';
+        uploadBtn.disabled = true;
+
+        try {
+            const response = await fetch(`${API_BASE}/upload`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showToast('File uploaded! Processing started...', 'success');
+                document.getElementById('upload-progress').style.display = 'block';
+
+                // Start polling for progress (fast: every 800ms)
+                pollJobProgress(data.id);
+
+                selectedFile = null;
+                document.getElementById('selected-file').textContent = '';
+                document.getElementById('file-input').value = '';
+            } else {
+                showToast(data.detail || 'Upload failed', 'danger');
+            }
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            showToast('Upload failed: ' + error.message, 'danger');
+        } finally {
+            uploadBtn.querySelector('.spinner').style.display = 'none';
+            uploadBtn.querySelector('.btn-text').style.display = '';
+            uploadBtn.disabled = false;
+        }
+    });
+}
 
 async function pollJobProgress(jobId) {
     const progressBar = document.getElementById('progress-bar');
@@ -329,29 +450,46 @@ async function pollJobProgress(jobId) {
     const progressPercent = document.getElementById('progress-percent');
     const progressDetail = document.getElementById('progress-detail');
 
+    // Start with indeterminate animation
+    progressBar.classList.add('indeterminate');
+
     const poll = async () => {
         try {
             const response = await fetch(`${API_BASE}/jobs/${jobId}`);
             const data = await response.json();
 
-            progressBar.style.width = `${data.progress}%`;
+            // Switch from indeterminate to determinate once we get real progress
+            if (data.progress > 0) {
+                progressBar.classList.remove('indeterminate');
+                progressBar.style.width = `${data.progress}%`;
+            }
+
             progressPercent.textContent = `${data.progress}%`;
-            progressStatus.textContent = data.status === 'processing' ? 'Processing...' : (data.status || '');
-            if (progressDetail) progressDetail.textContent = data.message || '';
+            progressStatus.textContent = data.message || (data.status === 'processing' ? 'Processing...' : (data.status || ''));
+            if (progressDetail) progressDetail.textContent = '';
 
             if (data.status === 'completed') {
+                progressBar.classList.remove('indeterminate');
+                progressBar.style.width = '100%';
+                progressPercent.textContent = '100%';
                 showToast('Processing completed successfully!', 'success');
-                document.getElementById('upload-progress').style.display = 'none';
+                setTimeout(() => {
+                    document.getElementById('upload-progress').style.display = 'none';
+                    progressBar.style.width = '0%';
+                }, 2000);
                 loadUploadedFiles();
                 refreshStats();
             } else if (data.status === 'failed') {
+                progressBar.classList.remove('indeterminate');
                 showToast('Processing failed: ' + data.message, 'danger');
                 document.getElementById('upload-progress').style.display = 'none';
             } else {
-                setTimeout(poll, 2000);
+                // Poll faster (800ms) to catch intermediate states
+                setTimeout(poll, 800);
             }
         } catch (error) {
             console.error('Polling error:', error);
+            setTimeout(poll, 2000);
         }
     };
 
@@ -608,68 +746,73 @@ async function deleteSubject(code, regulation = '2019') {
 // Search
 // ═══════════════════════════════════════════════════════════════════════════════
 
-document.getElementById('search-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
+function initSearchForm() {
+    const form = document.getElementById('search-form');
+    if (!form) return;
 
-    const query = document.getElementById('search-query').value;
-    const limit = document.getElementById('search-limit').value;
-    const branch = document.getElementById('search-branch').value;
-    const semester = document.getElementById('search-semester').value;
-    const subjectCode = document.getElementById('search-subject-code').value;
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
 
-    document.getElementById('search-results').innerHTML =
-        '<div class="text-center" style="padding:2rem"><div class="spinner spinner-lg"></div><p class="text-muted" style="margin-top:0.75rem">Searching...</p></div>';
+        const query = document.getElementById('search-query').value;
+        const limit = document.getElementById('search-limit').value;
+        const branch = document.getElementById('search-branch').value;
+        const semester = document.getElementById('search-semester').value;
+        const subjectCode = document.getElementById('search-subject-code').value;
 
-    try {
-        const response = await fetch(`${API_BASE}/search`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                query: query,
-                limit: parseInt(limit),
-                branch: branch || null,
-                semester: semester ? parseInt(semester) : null,
-                subject_code: subjectCode || null
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.results.length === 0) {
-            document.getElementById('search-results').innerHTML =
-                '<div class="text-center text-muted" style="padding:2rem"><p>No results found</p></div>';
-            return;
-        }
-
-        document.getElementById('search-results').innerHTML = `
-            <div class="flex items-center justify-between mb-sm">
-                <span class="text-sm text-muted">${data.total_results} results found in ${data.search_time_ms.toFixed(0)}ms</span>
-            </div>
-            ${data.results.map((r, i) => `
-                <div class="card" style="margin-bottom:0.75rem">
-                    <div class="card-body compact">
-                        <div class="flex items-start justify-between" style="margin-bottom:0.5rem">
-                            <div>
-                                <span class="badge badge-info" style="margin-right:0.5rem">${r.subject_code}</span>
-                                <span class="text-sm text-muted">${r.subject_name}</span>
-                            </div>
-                            <span class="badge badge-success">${(r.similarity_score * 100).toFixed(1)}% match</span>
-                        </div>
-                        <p style="font-size:0.875rem;margin-bottom:0.375rem">${r.content}</p>
-                        <span class="text-xs text-muted">
-                            ${r.module_name ? `Module: ${r.module_name}` : ''}
-                            ${r.topic_name ? `| Topic: ${r.topic_name}` : ''}
-                        </span>
-                    </div>
-                </div>
-            `).join('')}
-        `;
-
-    } catch (error) {
         document.getElementById('search-results').innerHTML =
-            `<div class="alert alert-danger">Search failed: ${error.message}</div>`;
-    }
-});
+            '<div class="text-center" style="padding:2rem"><div class="spinner spinner-lg"></div><p class="text-muted" style="margin-top:0.75rem">Searching...</p></div>';
+
+        try {
+            const response = await fetch(`${API_BASE}/search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: query,
+                    limit: parseInt(limit),
+                    branch: branch || null,
+                    semester: semester ? parseInt(semester) : null,
+                    subject_code: subjectCode || null
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.results.length === 0) {
+                document.getElementById('search-results').innerHTML =
+                    '<div class="text-center text-muted" style="padding:2rem"><p>No results found</p></div>';
+                return;
+            }
+
+            document.getElementById('search-results').innerHTML = `
+                <div class="flex items-center justify-between mb-sm">
+                    <span class="text-sm text-muted">${data.total_results} results found in ${data.search_time_ms.toFixed(0)}ms</span>
+                </div>
+                ${data.results.map((r, i) => `
+                    <div class="card" style="margin-bottom:0.75rem">
+                        <div class="card-body compact">
+                            <div class="flex items-start justify-between" style="margin-bottom:0.5rem">
+                                <div>
+                                    <span class="badge badge-info" style="margin-right:0.5rem">${r.subject_code}</span>
+                                    <span class="text-sm text-muted">${r.subject_name}</span>
+                                </div>
+                                <span class="badge badge-success">${(r.similarity_score * 100).toFixed(1)}% match</span>
+                            </div>
+                            <p style="font-size:0.875rem;margin-bottom:0.375rem">${r.content}</p>
+                            <span class="text-xs text-muted">
+                                ${r.module_name ? `Module: ${r.module_name}` : ''}
+                                ${r.topic_name ? `| Topic: ${r.topic_name}` : ''}
+                            </span>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+
+        } catch (error) {
+            document.getElementById('search-results').innerHTML =
+                `<div class="alert alert-danger">Search failed: ${error.message}</div>`;
+        }
+    });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Jobs
@@ -699,7 +842,7 @@ async function loadJobs() {
                 <td>
                     <div class="flex items-center gap-sm">
                         <div class="progress-bar-wrap" style="width:80px">
-                            <div class="progress-bar-fill" style="width:${job.progress}%"></div>
+                            <div class="progress-bar-fill${job.status === 'processing' && job.progress === 0 ? ' indeterminate' : ''}" style="width:${job.progress}%"></div>
                         </div>
                         <span class="text-xs text-muted">${job.progress}%</span>
                     </div>
@@ -813,5 +956,14 @@ function formatDate(dateStr) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize custom dropdowns
+    initCustomSelects();
+
+    // Bind upload + search forms
+    initUploadZone();
+    initUploadForm();
+    initSearchForm();
+
+    // Load dashboard
     loadDashboard();
 });

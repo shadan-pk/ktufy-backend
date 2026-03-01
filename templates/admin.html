@@ -15,7 +15,7 @@
             --foreground:       hsl(0 0% 98%);
             --card:             hsl(240 10% 3.9%);
             --card-foreground:  hsl(0 0% 98%);
-            --popover:          hsl(240 10% 3.9%);
+            --popover:          hsl(240 10% 6%);
             --popover-foreground: hsl(0 0% 98%);
             --primary:          hsl(0 0% 98%);
             --primary-foreground: hsl(240 5.9% 10%);
@@ -36,10 +36,6 @@
             --success:          hsl(142 71% 45%);
             --warning:          hsl(38 92% 50%);
             --info:             hsl(217 91% 60%);
-            --chart-1:          hsl(220 70% 50%);
-            --chart-2:          hsl(160 60% 45%);
-            --chart-3:          hsl(30 80% 55%);
-            --chart-4:          hsl(280 65% 60%);
         }
 
         /* ═══════════════════════════════════════════════════════════════════
@@ -63,144 +59,64 @@
 
         a { color: inherit; text-decoration: none; }
         code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8125rem; background: var(--muted); padding: 0.125rem 0.375rem; border-radius: 4px; }
+        ul { list-style: disc; padding-left: 1.25rem; }
+        li { margin-bottom: 0.375rem; }
 
-        /* ═══════════════════════════════════════════════════════════════════
-           Layout
-           ═══════════════════════════════════════════════════════════════════ */
-        .app-layout {
-            display: flex;
-            min-height: 100vh;
-        }
+        .app-layout { display: flex; min-height: 100vh; }
 
         /* ═══════════════════════════════════════════════════════════════════
            Sidebar
            ═══════════════════════════════════════════════════════════════════ */
         .sidebar {
-            width: 260px;
-            min-height: 100vh;
-            position: fixed;
-            top: 0; left: 0;
-            display: flex;
-            flex-direction: column;
-            background: var(--background);
-            border-right: 1px solid var(--border);
-            padding: 1.5rem 0.75rem;
-            z-index: 50;
+            width: 260px; min-height: 100vh; position: fixed;
+            top: 0; left: 0; display: flex; flex-direction: column;
+            background: var(--background); border-right: 1px solid var(--border);
+            padding: 1.5rem 0.75rem; z-index: 50;
         }
 
         .sidebar-logo {
-            display: flex;
-            align-items: center;
-            gap: 0.625rem;
-            padding: 0 0.75rem 1.25rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
+            display: flex; align-items: center; gap: 0.625rem;
+            padding: 0 0.75rem 1.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem;
         }
-
         .sidebar-logo .logo-icon {
-            width: 32px; height: 32px;
-            background: var(--foreground);
-            color: var(--primary-foreground);
-            border-radius: var(--radius);
-            display: flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; background: var(--foreground); color: var(--primary-foreground);
+            border-radius: var(--radius); display: flex; align-items: center; justify-content: center;
         }
-
-        .sidebar-logo span {
-            font-weight: 700;
-            font-size: 1.125rem;
-            letter-spacing: -0.025em;
-        }
+        .sidebar-logo span { font-weight: 700; font-size: 1.125rem; letter-spacing: -0.025em; }
 
         .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 
         .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.5rem 0.75rem;
-            border-radius: var(--radius);
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--muted-foreground);
-            cursor: pointer;
-            transition: background 150ms, color 150ms;
-            border: none;
-            background: none;
-            width: 100%;
-            text-align: left;
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.5rem 0.75rem; border-radius: var(--radius);
+            font-size: 0.875rem; font-weight: 500; color: var(--muted-foreground);
+            cursor: pointer; transition: background 150ms, color 150ms;
+            border: none; background: none; width: 100%; text-align: left;
+            font-family: inherit;
         }
+        .nav-item:hover { background: var(--accent); color: var(--accent-foreground); }
+        .nav-item.active { background: var(--accent); color: var(--accent-foreground); }
+        .nav-item i, .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
 
-        .nav-item:hover {
-            background: var(--accent);
-            color: var(--accent-foreground);
-        }
-
-        .nav-item.active {
-            background: var(--accent);
-            color: var(--accent-foreground);
-        }
-
-        .nav-item i { width: 18px; height: 18px; flex-shrink: 0; }
-
-        .sidebar-footer {
-            padding-top: 1rem;
-            border-top: 1px solid var(--border);
-            margin-top: auto;
-        }
-
+        .sidebar-footer { padding-top: 1rem; border-top: 1px solid var(--border); margin-top: auto; }
         .sidebar-footer .footer-label {
-            font-size: 0.75rem;
-            font-weight: 500;
-            color: var(--muted-foreground);
-            padding: 0 0.75rem;
-            margin-bottom: 0.5rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            font-size: 0.75rem; font-weight: 500; color: var(--muted-foreground);
+            padding: 0 0.75rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;
         }
 
-        .status-row {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.375rem 0.75rem;
-            font-size: 0.8125rem;
-            color: var(--muted-foreground);
-        }
-
-        .status-dot {
-            width: 7px; height: 7px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .status-dot.online  { background: var(--success); box-shadow: 0 0 6px var(--success); }
+        .status-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.375rem 0.75rem; font-size: 0.8125rem; color: var(--muted-foreground); }
+        .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .status-dot.online { background: var(--success); box-shadow: 0 0 6px var(--success); }
         .status-dot.offline { background: hsl(0 62.8% 50%); }
 
         /* ═══════════════════════════════════════════════════════════════════
            Main Content
            ═══════════════════════════════════════════════════════════════════ */
-        .main-content {
-            margin-left: 260px;
-            flex: 1;
-            padding: 2rem 2.5rem;
-            min-height: 100vh;
-        }
+        .main-content { margin-left: 260px; flex: 1; padding: 2rem 2.5rem; min-height: 100vh; }
 
-        .page-header {
-            margin-bottom: 1.75rem;
-        }
-
-        .page-header h2 {
-            font-size: 1.875rem;
-            font-weight: 700;
-            letter-spacing: -0.025em;
-        }
-
-        .page-header p {
-            color: var(--muted-foreground);
-            font-size: 0.875rem;
-            margin-top: 0.25rem;
-        }
+        .page-header { margin-bottom: 1.75rem; }
+        .page-header h2 { font-size: 1.875rem; font-weight: 700; letter-spacing: -0.025em; }
+        .page-header p { color: var(--muted-foreground); font-size: 0.875rem; margin-top: 0.25rem; }
 
         .content-section { display: none; }
         .content-section.active { display: block; }
@@ -208,71 +124,23 @@
         /* ═══════════════════════════════════════════════════════════════════
            Card Component
            ═══════════════════════════════════════════════════════════════════ */
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            overflow: hidden;
-        }
-
-        .card-header {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .card-header h5 {
-            font-size: 1rem;
-            font-weight: 600;
-        }
-
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        .card-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .card-header h5 { font-size: 1rem; font-weight: 600; }
         .card-body { padding: 1.5rem; }
         .card-body.compact { padding: 1rem 1.5rem; }
 
         /* ═══════════════════════════════════════════════════════════════════
            Stat Cards
            ═══════════════════════════════════════════════════════════════════ */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .stat-card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 1.25rem 1.5rem;
-        }
-
-        .stat-card .stat-label {
-            font-size: 0.8125rem;
-            font-weight: 500;
-            color: var(--muted-foreground);
-            margin-bottom: 0.25rem;
-        }
-
-        .stat-card .stat-value {
-            font-size: 1.875rem;
-            font-weight: 700;
-            letter-spacing: -0.025em;
-            line-height: 1;
-        }
-
-        .stat-card .stat-icon {
-            float: right;
-            width: 40px; height: 40px;
-            border-radius: var(--radius);
-            display: flex; align-items: center; justify-content: center;
-            background: var(--muted);
-            color: var(--muted-foreground);
-        }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; }
+        .stat-card .stat-label { font-size: 0.8125rem; font-weight: 500; color: var(--muted-foreground); margin-bottom: 0.25rem; }
+        .stat-card .stat-value { font-size: 1.875rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1; }
+        .stat-card .stat-icon { float: right; width: 40px; height: 40px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; background: var(--muted); color: var(--muted-foreground); }
 
         /* ═══════════════════════════════════════════════════════════════════
-           Grid Helpers
+           Grid & Flex Helpers
            ═══════════════════════════════════════════════════════════════════ */
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
@@ -282,7 +150,6 @@
         .mb-sm { margin-bottom: 1rem; }
         .mt-md { margin-top: 1.5rem; }
         .mt-sm { margin-top: 1rem; }
-
         .flex { display: flex; }
         .flex-col { flex-direction: column; }
         .items-center { align-items: center; }
@@ -290,87 +157,67 @@
         .justify-between { justify-content: space-between; }
         .gap-sm { gap: 0.5rem; }
         .gap-xs { gap: 0.25rem; }
-        .flex-1 { flex: 1; }
         .w-full { width: 100%; }
-        .h-full { height: 100%; }
         .text-center { text-align: center; }
 
         /* ═══════════════════════════════════════════════════════════════════
            Buttons
            ═══════════════════════════════════════════════════════════════════ */
         .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius);
-            font-size: 0.875rem;
-            font-weight: 500;
-            font-family: inherit;
-            cursor: pointer;
-            transition: background 150ms, opacity 150ms;
-            border: none;
-            line-height: 1.25rem;
-            white-space: nowrap;
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+            padding: 0.5rem 1rem; border-radius: var(--radius); font-size: 0.875rem;
+            font-weight: 500; font-family: inherit; cursor: pointer;
+            transition: background 150ms, opacity 150ms; border: none;
+            line-height: 1.25rem; white-space: nowrap;
         }
-
-        .btn i { width: 16px; height: 16px; }
+        .btn i, .btn svg { width: 16px; height: 16px; }
         .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.8125rem; }
         .btn-lg { padding: 0.625rem 1.25rem; font-size: 0.9375rem; }
-
-        .btn-primary {
-            background: var(--primary);
-            color: var(--primary-foreground);
-        }
+        .btn-primary { background: var(--primary); color: var(--primary-foreground); }
         .btn-primary:hover { opacity: 0.9; }
-
-        .btn-secondary {
-            background: var(--secondary);
-            color: var(--secondary-foreground);
-        }
+        .btn-secondary { background: var(--secondary); color: var(--secondary-foreground); }
         .btn-secondary:hover { background: hsl(240 3.7% 20%); }
-
-        .btn-outline {
-            background: transparent;
-            color: var(--foreground);
-            border: 1px solid var(--border);
-        }
+        .btn-outline { background: transparent; color: var(--foreground); border: 1px solid var(--border); }
         .btn-outline:hover { background: var(--accent); }
-
-        .btn-destructive {
-            background: var(--destructive);
-            color: var(--destructive-foreground);
-        }
+        .btn-destructive { background: var(--destructive); color: var(--destructive-foreground); }
         .btn-destructive:hover { opacity: 0.9; }
-
-        .btn-ghost {
-            background: transparent;
-            color: var(--muted-foreground);
-        }
+        .btn-ghost { background: transparent; color: var(--muted-foreground); }
         .btn-ghost:hover { background: var(--accent); color: var(--accent-foreground); }
-
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
         .btn-group { display: flex; flex-direction: column; gap: 0.5rem; }
 
-        .btn .spinner { display: none; }
-        .btn.loading .spinner { display: inline-block; }
-        .btn.loading .btn-text { display: none; }
-
         /* ═══════════════════════════════════════════════════════════════════
-           Forms
+           Forms — text inputs
            ═══════════════════════════════════════════════════════════════════ */
         .form-group { margin-bottom: 1rem; }
-        .form-label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--foreground);
-            margin-bottom: 0.375rem;
+        .form-label { display: block; font-size: 0.875rem; font-weight: 500; color: var(--foreground); margin-bottom: 0.375rem; }
+
+        .form-input {
+            width: 100%; padding: 0.5rem 0.75rem; font-size: 0.875rem; font-family: inherit;
+            background: var(--background); color: var(--foreground);
+            border: 1px solid var(--input); border-radius: var(--radius);
+            transition: border-color 150ms, box-shadow 150ms; line-height: 1.5; outline: none;
+        }
+        .form-input::placeholder { color: var(--muted-foreground); }
+        .form-input:focus { border-color: var(--ring); box-shadow: 0 0 0 2px hsla(240, 4.9%, 83.9%, 0.15); }
+        .form-input-lg { padding: 0.625rem 1rem; font-size: 1rem; }
+
+        .search-input-wrap { position: relative; }
+        .search-input-wrap .search-icon { position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--muted-foreground); pointer-events: none; }
+        .search-input-wrap .form-input { padding-left: 2.5rem; }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           Custom Select / Dropdown (Shadcn-style)
+           ═══════════════════════════════════════════════════════════════════ */
+        .custom-select {
+            position: relative;
+            width: 100%;
         }
 
-        .form-input, .form-select {
+        .custom-select-trigger {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             width: 100%;
             padding: 0.5rem 0.75rem;
             font-size: 0.875rem;
@@ -379,384 +226,195 @@
             color: var(--foreground);
             border: 1px solid var(--input);
             border-radius: var(--radius);
+            cursor: pointer;
             transition: border-color 150ms, box-shadow 150ms;
             line-height: 1.5;
             outline: none;
+            user-select: none;
         }
 
-        .form-input::placeholder { color: var(--muted-foreground); }
-
-        .form-input:focus, .form-select:focus {
+        .custom-select-trigger:hover { border-color: var(--muted-foreground); }
+        .custom-select-trigger:focus,
+        .custom-select.open .custom-select-trigger {
             border-color: var(--ring);
             box-shadow: 0 0 0 2px hsla(240, 4.9%, 83.9%, 0.15);
         }
 
-        .form-select {
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-            background-repeat: no-repeat;
-            background-position: right 0.75rem center;
-            background-size: 16px;
-            padding-right: 2.5rem;
-        }
+        .custom-select-trigger .trigger-text { flex: 1; text-align: left; }
+        .custom-select-trigger .trigger-text.placeholder { color: var(--muted-foreground); }
 
-        .form-select option {
-            background: var(--popover);
-            color: var(--popover-foreground);
+        .custom-select-trigger .chevron {
+            width: 16px; height: 16px; color: var(--muted-foreground);
+            transition: transform 200ms;
+            flex-shrink: 0;
         }
+        .custom-select.open .chevron { transform: rotate(180deg); }
 
-        .form-input-lg { padding: 0.625rem 1rem; font-size: 1rem; }
-
-        .search-input-wrap {
-            position: relative;
-        }
-        .search-input-wrap .search-icon {
+        .custom-select-dropdown {
+            display: none;
             position: absolute;
-            left: 0.75rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--muted-foreground);
-            pointer-events: none;
+            top: calc(100% + 4px);
+            left: 0; right: 0;
+            background: var(--popover);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: 0 8px 30px hsla(0, 0%, 0%, 0.5);
+            z-index: 60;
+            max-height: 240px;
+            overflow-y: auto;
+            animation: dropdown-in 150ms ease;
+            padding: 4px;
         }
-        .search-input-wrap .form-input {
-            padding-left: 2.5rem;
+
+        .custom-select.open .custom-select-dropdown { display: block; }
+
+        @keyframes dropdown-in {
+            from { opacity: 0; transform: translateY(-4px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
+
+        .custom-select-option {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 0.625rem;
+            font-size: 0.875rem;
+            color: var(--foreground);
+            cursor: pointer;
+            border-radius: calc(var(--radius) - 2px);
+            transition: background 100ms;
+        }
+
+        .custom-select-option:hover { background: var(--accent); }
+        .custom-select-option.selected { background: var(--accent); font-weight: 500; }
+
+        .custom-select-option .check-icon {
+            width: 16px; height: 16px; margin-right: 0.5rem;
+            color: var(--foreground); flex-shrink: 0;
+            visibility: hidden;
+        }
+        .custom-select-option.selected .check-icon { visibility: visible; }
+
+        /* Keep hidden native select for form submission */
+        .custom-select select { display: none; }
+
+        .custom-select-trigger-lg { padding: 0.625rem 1rem; font-size: 1rem; }
 
         /* ═══════════════════════════════════════════════════════════════════
            Table
            ═══════════════════════════════════════════════════════════════════ */
         .table-wrap { overflow-x: auto; }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.875rem;
-        }
-
-        thead th {
-            text-align: left;
-            padding: 0.75rem 1rem;
-            font-weight: 500;
-            font-size: 0.8125rem;
-            color: var(--muted-foreground);
-            border-bottom: 1px solid var(--border);
-            white-space: nowrap;
-        }
-
-        tbody td {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid var(--border);
-            vertical-align: middle;
-        }
-
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        thead th { text-align: left; padding: 0.75rem 1rem; font-weight: 500; font-size: 0.8125rem; color: var(--muted-foreground); border-bottom: 1px solid var(--border); white-space: nowrap; }
+        tbody td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
         tbody tr:last-child td { border-bottom: none; }
-
         tbody tr:hover { background: hsl(240 3.7% 10%); }
-
-        .td-empty {
-            text-align: center;
-            color: var(--muted-foreground);
-            padding: 2rem 1rem;
-        }
+        .td-empty { text-align: center; color: var(--muted-foreground); padding: 2rem 1rem; }
 
         /* ═══════════════════════════════════════════════════════════════════
            Badge
            ═══════════════════════════════════════════════════════════════════ */
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.125rem 0.625rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 500;
-            line-height: 1.5;
-            white-space: nowrap;
-        }
-
-        .badge-default    { background: var(--secondary); color: var(--secondary-foreground); }
-        .badge-primary    { background: var(--primary); color: var(--primary-foreground); }
-        .badge-success    { background: hsla(142, 71%, 45%, 0.15); color: hsl(142 71% 55%); }
-        .badge-warning    { background: hsla(38, 92%, 50%, 0.15); color: hsl(38 92% 60%); }
-        .badge-danger     { background: hsla(0, 62.8%, 50%, 0.15); color: hsl(0 62.8% 60%); }
-        .badge-info       { background: hsla(217, 91%, 60%, 0.15); color: hsl(217 91% 70%); }
-        .badge-outline    { background: transparent; border: 1px solid var(--border); color: var(--foreground); }
-        .badge-muted      { background: var(--muted); color: var(--muted-foreground); }
+        .badge { display: inline-flex; align-items: center; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; line-height: 1.5; white-space: nowrap; }
+        .badge-default  { background: var(--secondary); color: var(--secondary-foreground); }
+        .badge-primary  { background: var(--primary); color: var(--primary-foreground); }
+        .badge-success  { background: hsla(142, 71%, 45%, 0.15); color: hsl(142 71% 55%); }
+        .badge-warning  { background: hsla(38, 92%, 50%, 0.15); color: hsl(38 92% 60%); }
+        .badge-danger   { background: hsla(0, 62.8%, 50%, 0.15); color: hsl(0 62.8% 60%); }
+        .badge-info     { background: hsla(217, 91%, 60%, 0.15); color: hsl(217 91% 70%); }
+        .badge-muted    { background: var(--muted); color: var(--muted-foreground); }
 
         /* ═══════════════════════════════════════════════════════════════════
            Progress Bar
            ═══════════════════════════════════════════════════════════════════ */
-        .progress-bar-wrap {
-            height: 8px;
-            background: var(--muted);
-            border-radius: 9999px;
-            overflow: hidden;
-        }
+        .progress-bar-wrap { height: 8px; background: var(--muted); border-radius: 9999px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background: var(--foreground); border-radius: 9999px; transition: width 300ms ease; }
 
-        .progress-bar-fill {
-            height: 100%;
-            background: var(--foreground);
-            border-radius: 9999px;
-            transition: width 300ms ease;
+        /* Indeterminate shimmer when progress is 0 but processing */
+        .progress-bar-fill.indeterminate {
+            width: 40% !important;
+            background: linear-gradient(90deg, transparent 0%, var(--foreground) 50%, transparent 100%);
+            animation: shimmer 1.5s infinite;
         }
+        @keyframes shimmer { 0% { transform: translateX(-150%); } 100% { transform: translateX(350%); } }
 
         /* ═══════════════════════════════════════════════════════════════════
            Upload Zone
            ═══════════════════════════════════════════════════════════════════ */
-        .upload-zone {
-            border: 2px dashed var(--border);
-            border-radius: var(--radius);
-            padding: 3rem 2rem;
-            text-align: center;
-            cursor: pointer;
-            transition: border-color 150ms, background 150ms;
-        }
-
-        .upload-zone:hover {
-            border-color: var(--muted-foreground);
-            background: hsl(240 3.7% 8%);
-        }
-
-        .upload-zone.dragover {
-            border-color: var(--ring);
-            background: hsl(240 3.7% 10%);
-        }
-
-        .upload-zone .upload-icon {
-            color: var(--muted-foreground);
-            margin-bottom: 1rem;
-        }
-
+        .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 3rem 2rem; text-align: center; cursor: pointer; transition: border-color 150ms, background 150ms; }
+        .upload-zone:hover { border-color: var(--muted-foreground); background: hsl(240 3.7% 8%); }
+        .upload-zone.dragover { border-color: var(--ring); background: hsl(240 3.7% 10%); }
+        .upload-zone .upload-icon { color: var(--muted-foreground); margin-bottom: 1rem; }
         .upload-zone h5 { font-weight: 600; margin-bottom: 0.25rem; }
-        .upload-zone p  { color: var(--muted-foreground); font-size: 0.875rem; }
+        .upload-zone p { color: var(--muted-foreground); font-size: 0.875rem; }
 
         /* ═══════════════════════════════════════════════════════════════════
            Modal / Dialog
            ═══════════════════════════════════════════════════════════════════ */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: hsla(0, 0%, 0%, 0.8);
-            backdrop-filter: blur(4px);
-            z-index: 100;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-overlay.open {
-            display: flex;
-        }
-
-        .modal-dialog {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: calc(var(--radius) + 2px);
-            width: 90%;
-            max-height: 85vh;
-            overflow-y: auto;
-            box-shadow: 0 25px 50px -12px hsla(0, 0%, 0%, 0.5);
-            animation: modal-in 200ms ease;
-        }
-
+        .modal-overlay { display: none; position: fixed; inset: 0; background: hsla(0, 0%, 0%, 0.8); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
+        .modal-overlay.open { display: flex; }
+        .modal-dialog { background: var(--card); border: 1px solid var(--border); border-radius: calc(var(--radius) + 2px); width: 90%; max-height: 85vh; overflow-y: auto; box-shadow: 0 25px 50px -12px hsla(0, 0%, 0%, 0.5); animation: modal-in 200ms ease; }
         .modal-dialog.modal-lg { max-width: 640px; }
         .modal-dialog.modal-xl { max-width: 960px; }
-
-        @keyframes modal-in {
-            from { opacity: 0; transform: scale(0.96) translateY(8px); }
-            to   { opacity: 1; transform: scale(1) translateY(0); }
-        }
-
-        .modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1.25rem 1.5rem 1rem;
-        }
-
+        @keyframes modal-in { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 1.5rem 1rem; }
         .modal-header h5 { font-size: 1.125rem; font-weight: 600; }
-
-        .modal-close {
-            width: 32px; height: 32px;
-            display: flex; align-items: center; justify-content: center;
-            background: none; border: none;
-            color: var(--muted-foreground);
-            border-radius: var(--radius);
-            cursor: pointer;
-            transition: background 150ms;
-        }
+        .modal-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: none; border: none; color: var(--muted-foreground); border-radius: var(--radius); cursor: pointer; transition: background 150ms; }
         .modal-close:hover { background: var(--accent); color: var(--foreground); }
-
         .modal-body { padding: 0 1.5rem 1.5rem; }
-
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 0.5rem;
-            padding: 1rem 1.5rem;
-            border-top: 1px solid var(--border);
-        }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border); }
 
         /* ═══════════════════════════════════════════════════════════════════
            Subject Cards
            ═══════════════════════════════════════════════════════════════════ */
-        .subject-card {
-            cursor: pointer;
-            transition: border-color 150ms, background 150ms;
-        }
-        .subject-card:hover {
-            border-color: var(--muted-foreground);
-            background: hsl(240 3.7% 6%);
-        }
-
+        .subject-card { cursor: pointer; transition: border-color 150ms, background 150ms; }
+        .subject-card:hover { border-color: var(--muted-foreground); background: hsl(240 3.7% 6%); }
         .subject-card .card-body { padding: 1.25rem; }
-
-        .subject-meta {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.8125rem;
-            color: var(--muted-foreground);
-            margin-top: 0.5rem;
-        }
-
-        .subject-meta span {
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-        }
+        .subject-meta { display: flex; gap: 1rem; font-size: 0.8125rem; color: var(--muted-foreground); margin-top: 0.5rem; }
+        .subject-meta span { display: flex; align-items: center; gap: 0.25rem; }
 
         /* ═══════════════════════════════════════════════════════════════════
            List Group
            ═══════════════════════════════════════════════════════════════════ */
         .list-group { display: flex; flex-direction: column; }
-
-        .list-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid var(--border);
-        }
-
+        .list-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
         .list-item:last-child { border-bottom: none; }
-
         .list-item-label { font-size: 0.875rem; font-weight: 500; }
-        .list-item-sub   { font-size: 0.75rem; color: var(--muted-foreground); }
+        .list-item-sub { font-size: 0.75rem; color: var(--muted-foreground); }
         .list-item-right { font-size: 0.8125rem; color: var(--muted-foreground); }
 
         /* ═══════════════════════════════════════════════════════════════════
            Toast / Sonner-style notifications
            ═══════════════════════════════════════════════════════════════════ */
-        .toast-container {
-            position: fixed;
-            bottom: 1.5rem;
-            right: 1.5rem;
-            z-index: 200;
-            display: flex;
-            flex-direction: column-reverse;
-            gap: 0.5rem;
-            max-width: 420px;
-        }
-
-        .toast {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.875rem 1rem;
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            font-size: 0.875rem;
-            color: var(--foreground);
-            box-shadow: 0 4px 12px hsla(0, 0%, 0%, 0.4);
-            animation: toast-in 250ms ease;
-        }
-
+        .toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200; display: flex; flex-direction: column-reverse; gap: 0.5rem; max-width: 420px; }
+        .toast { display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1rem; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.875rem; color: var(--foreground); box-shadow: 0 4px 12px hsla(0, 0%, 0%, 0.4); animation: toast-in 250ms ease; }
         .toast.toast-success { border-left: 3px solid var(--success); }
         .toast.toast-danger  { border-left: 3px solid hsl(0 62.8% 50%); }
         .toast.toast-warning { border-left: 3px solid var(--warning); }
         .toast.toast-info    { border-left: 3px solid var(--info); }
-
-        .toast-close {
-            margin-left: auto;
-            background: none; border: none;
-            color: var(--muted-foreground);
-            cursor: pointer;
-            padding: 0.25rem;
-        }
+        .toast-close { margin-left: auto; background: none; border: none; color: var(--muted-foreground); cursor: pointer; padding: 0.25rem; }
         .toast-close:hover { color: var(--foreground); }
-
-        @keyframes toast-in {
-            from { opacity: 0; transform: translateY(8px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
         /* ═══════════════════════════════════════════════════════════════════
-           Separator
+           Misc Utilities
            ═══════════════════════════════════════════════════════════════════ */
-        .separator {
-            height: 1px;
-            background: var(--border);
-            margin: 1rem 0;
-        }
-
-        /* ═══════════════════════════════════════════════════════════════════
-           Loading spinner
-           ═══════════════════════════════════════════════════════════════════ */
-        .spinner {
-            width: 16px; height: 16px;
-            border: 2px solid var(--muted-foreground);
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 600ms linear infinite;
-            display: inline-block;
-        }
-
+        .separator { height: 1px; background: var(--border); margin: 1rem 0; }
+        .spinner { width: 16px; height: 16px; border: 2px solid var(--muted-foreground); border-top-color: transparent; border-radius: 50%; animation: spin 600ms linear infinite; display: inline-block; }
         .spinner-lg { width: 24px; height: 24px; border-width: 3px; }
-
         @keyframes spin { to { transform: rotate(360deg); } }
+        .alert { padding: 0.875rem 1rem; border-radius: var(--radius); font-size: 0.875rem; border: 1px solid; }
+        .alert-danger { background: hsla(0, 62.8%, 30.6%, 0.15); border-color: hsla(0, 62.8%, 50%, 0.3); color: hsl(0 62.8% 70%); }
 
-        /* ═══════════════════════════════════════════════════════════════════
-           Alert
-           ═══════════════════════════════════════════════════════════════════ */
-        .alert {
-            padding: 0.875rem 1rem;
-            border-radius: var(--radius);
-            font-size: 0.875rem;
-            border: 1px solid;
-        }
-
-        .alert-danger {
-            background: hsla(0, 62.8%, 30.6%, 0.15);
-            border-color: hsla(0, 62.8%, 50%, 0.3);
-            color: hsl(0 62.8% 70%);
-        }
-
-        /* ═══════════════════════════════════════════════════════════════════
-           Text utilities
-           ═══════════════════════════════════════════════════════════════════ */
-        .text-muted   { color: var(--muted-foreground); }
-        .text-sm      { font-size: 0.8125rem; }
-        .text-xs      { font-size: 0.75rem; }
-        .text-danger  { color: hsl(0 62.8% 60%); }
+        .text-muted { color: var(--muted-foreground); }
+        .text-sm { font-size: 0.8125rem; }
+        .text-xs { font-size: 0.75rem; }
+        .text-danger { color: hsl(0 62.8% 60%); }
         .text-success { color: hsl(142 71% 55%); }
-        .font-medium  { font-weight: 500; }
-        .font-bold    { font-weight: 700; }
+        .font-medium { font-weight: 500; }
+        .font-bold { font-weight: 700; }
 
-        /* ═══════════════════════════════════════════════════════════════════
-           Responsive
-           ═══════════════════════════════════════════════════════════════════ */
-        @media (max-width: 1024px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-            .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 1024px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .sidebar { display: none; } .main-content { margin-left: 0; padding: 1.5rem; } .stats-grid { grid-template-columns: 1fr; } }
 
-        @media (max-width: 768px) {
-            .sidebar { display: none; }
-            .main-content { margin-left: 0; padding: 1.5rem; }
-            .stats-grid { grid-template-columns: 1fr; }
-        }
-
-        /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
@@ -765,197 +423,138 @@
 </head>
 <body>
     <div class="app-layout">
-        <!-- ═══════════════════════════════════════════════════════════════
-             Sidebar
-             ═══════════════════════════════════════════════════════════════ -->
+        <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-logo">
-                <div class="logo-icon">
-                    <i data-lucide="graduation-cap" style="width:18px;height:18px"></i>
-                </div>
+                <div class="logo-icon"><i data-lucide="graduation-cap" style="width:18px;height:18px"></i></div>
                 <span>KTUfy Admin</span>
             </div>
-
             <nav class="sidebar-nav">
-                <button class="nav-item active" data-section="dashboard">
+                <button class="nav-item active" data-section="dashboard" onclick="showSection('dashboard')">
                     <i data-lucide="layout-dashboard"></i> Dashboard
                 </button>
-                <button class="nav-item" data-section="upload">
+                <button class="nav-item" data-section="upload" onclick="showSection('upload')">
                     <i data-lucide="upload-cloud"></i> Upload Syllabus
                 </button>
-                <button class="nav-item" data-section="subjects">
+                <button class="nav-item" data-section="subjects" onclick="showSection('subjects')">
                     <i data-lucide="book-open"></i> Subjects
                 </button>
-                <button class="nav-item" data-section="search">
+                <button class="nav-item" data-section="search" onclick="showSection('search')">
                     <i data-lucide="search"></i> Search RAG
                 </button>
-                <button class="nav-item" data-section="jobs">
+                <button class="nav-item" data-section="jobs" onclick="showSection('jobs')">
                     <i data-lucide="list-todo"></i> Processing Jobs
                 </button>
-                <button class="nav-item" data-section="settings">
+                <button class="nav-item" data-section="settings" onclick="showSection('settings')">
                     <i data-lucide="settings"></i> Settings
                 </button>
             </nav>
-
             <div class="sidebar-footer">
                 <div class="footer-label">System Status</div>
-                <div class="status-row">
-                    <span class="status-dot" id="neo4j-status"></span>
-                    <span>Neo4j</span>
-                </div>
-                <div class="status-row">
-                    <span class="status-dot" id="embedding-status"></span>
-                    <span>Embeddings</span>
-                </div>
-                <div class="status-row">
-                    <span class="status-dot" id="llm-status"></span>
-                    <span>LLM (Groq)</span>
-                </div>
+                <div class="status-row"><span class="status-dot" id="neo4j-status"></span><span>Neo4j</span></div>
+                <div class="status-row"><span class="status-dot" id="embedding-status"></span><span>Embeddings</span></div>
+                <div class="status-row"><span class="status-dot" id="llm-status"></span><span>LLM (Groq)</span></div>
             </div>
         </aside>
 
-        <!-- ═══════════════════════════════════════════════════════════════
-             Main Content
-             ═══════════════════════════════════════════════════════════════ -->
+        <!-- Main Content -->
         <main class="main-content">
 
-            <!-- ═══════════════════════════════════════════════════════════
-                 Dashboard Section
-                 ═══════════════════════════════════════════════════════════ -->
+            <!-- Dashboard -->
             <section id="dashboard-section" class="content-section active">
-                <div class="page-header">
-                    <h2>Dashboard</h2>
-                    <p>Overview of your KG-RAG system</p>
-                </div>
-
-                <!-- Stats -->
+                <div class="page-header"><h2>Dashboard</h2><p>Overview of your KG-RAG system</p></div>
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-icon"><i data-lucide="book-open" style="width:18px;height:18px"></i></div>
-                        <div class="stat-label">Subjects</div>
-                        <div class="stat-value" id="stat-subjects">0</div>
+                        <div class="stat-label">Subjects</div><div class="stat-value" id="stat-subjects">0</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon"><i data-lucide="layers" style="width:18px;height:18px"></i></div>
-                        <div class="stat-label">Modules</div>
-                        <div class="stat-value" id="stat-modules">0</div>
+                        <div class="stat-label">Modules</div><div class="stat-value" id="stat-modules">0</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon"><i data-lucide="list" style="width:18px;height:18px"></i></div>
-                        <div class="stat-label">Topics</div>
-                        <div class="stat-value" id="stat-topics">0</div>
+                        <div class="stat-label">Topics</div><div class="stat-value" id="stat-topics">0</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon"><i data-lucide="network" style="width:18px;height:18px"></i></div>
-                        <div class="stat-label">Embeddings</div>
-                        <div class="stat-value" id="stat-embeddings">0</div>
+                        <div class="stat-label">Embeddings</div><div class="stat-value" id="stat-embeddings">0</div>
                     </div>
                 </div>
-
-                <!-- Quick Actions & Branch Info -->
                 <div class="grid-2 gap-md mb-md">
-                    <div class="card h-full">
+                    <div class="card">
                         <div class="card-header"><h5>Quick Actions</h5></div>
                         <div class="card-body">
                             <div class="btn-group">
-                                <button class="btn btn-primary" onclick="showSection('upload')">
-                                    <i data-lucide="upload-cloud"></i> Upload New Syllabus
-                                </button>
-                                <button class="btn btn-outline" onclick="showSection('subjects')">
-                                    <i data-lucide="plus-circle"></i> Add Subject Manually
-                                </button>
-                                <button class="btn btn-outline" onclick="setupNeo4j()">
-                                    <i data-lucide="database"></i> Setup Neo4j Constraints
-                                </button>
-                                <button class="btn btn-outline" onclick="refreshStats()">
-                                    <i data-lucide="refresh-cw"></i> Refresh Statistics
-                                </button>
+                                <button class="btn btn-primary" onclick="showSection('upload')"><i data-lucide="upload-cloud"></i> Upload New Syllabus</button>
+                                <button class="btn btn-outline" onclick="showSection('subjects')"><i data-lucide="plus-circle"></i> Add Subject Manually</button>
+                                <button class="btn btn-outline" onclick="setupNeo4j()"><i data-lucide="database"></i> Setup Neo4j Constraints</button>
+                                <button class="btn btn-outline" onclick="refreshStats()"><i data-lucide="refresh-cw"></i> Refresh Statistics</button>
                             </div>
                         </div>
                     </div>
-                    <div class="card h-full">
+                    <div class="card">
                         <div class="card-header"><h5>Branches & Semesters</h5></div>
                         <div class="card-body">
-                            <div class="mb-sm">
-                                <div class="text-xs text-muted font-medium" style="margin-bottom:0.375rem">Available Branches</div>
-                                <div id="branches-list"><span class="text-muted text-sm">Loading...</span></div>
-                            </div>
-                            <div class="mb-sm">
-                                <div class="text-xs text-muted font-medium" style="margin-bottom:0.375rem">Semesters with Data</div>
-                                <div id="semesters-list"><span class="text-muted text-sm">Loading...</span></div>
-                            </div>
-                            <div>
-                                <div class="text-xs text-muted font-medium" style="margin-bottom:0.375rem">Regulations</div>
-                                <div id="regulations-list"><span class="text-muted text-sm">Loading...</span></div>
-                            </div>
+                            <div class="mb-sm"><div class="text-xs text-muted font-medium" style="margin-bottom:0.375rem">Available Branches</div><div id="branches-list"><span class="text-muted text-sm">Loading...</span></div></div>
+                            <div class="mb-sm"><div class="text-xs text-muted font-medium" style="margin-bottom:0.375rem">Semesters with Data</div><div id="semesters-list"><span class="text-muted text-sm">Loading...</span></div></div>
+                            <div><div class="text-xs text-muted font-medium" style="margin-bottom:0.375rem">Regulations</div><div id="regulations-list"><span class="text-muted text-sm">Loading...</span></div></div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Active Users -->
                 <div class="card">
-                    <div class="card-header">
-                        <h5>Active Users</h5>
-                        <span class="text-sm text-muted" id="active-users-meta">Loading...</span>
-                    </div>
+                    <div class="card-header"><h5>Active Users</h5><span class="text-sm text-muted" id="active-users-meta">Loading...</span></div>
                     <div class="card-body compact">
-                        <div class="list-group" id="active-users-list">
-                            <div class="list-item"><span class="text-muted text-sm">Loading...</span></div>
-                        </div>
+                        <div class="list-group" id="active-users-list"><div class="list-item"><span class="text-muted text-sm">Loading...</span></div></div>
                     </div>
                 </div>
             </section>
 
-            <!-- ═══════════════════════════════════════════════════════════
-                 Upload Section
-                 ═══════════════════════════════════════════════════════════ -->
+            <!-- Upload -->
             <section id="upload-section" class="content-section">
-                <div class="page-header">
-                    <h2>Upload Syllabus PDF</h2>
-                    <p>Upload and process KTU syllabus documents into the knowledge graph</p>
-                </div>
-
+                <div class="page-header"><h2>Upload Syllabus PDF</h2><p>Upload and process KTU syllabus documents into the knowledge graph</p></div>
                 <div class="card mb-md">
                     <div class="card-body">
                         <form id="upload-form">
                             <div class="grid-3 gap-md mb-md">
                                 <div class="form-group">
                                     <label class="form-label">Branch</label>
-                                    <select class="form-select" id="upload-branch" required>
-                                        <option value="">Select Branch</option>
-                                        <option value="CSE">CSE - Computer Science</option>
-                                        <option value="ECE">ECE - Electronics & Communication</option>
-                                        <option value="EEE">EEE - Electrical & Electronics</option>
-                                        <option value="ME">ME - Mechanical</option>
-                                        <option value="CE">CE - Civil</option>
-                                        <option value="IT">IT - Information Technology</option>
-                                        <option value="AI">AI - Artificial Intelligence</option>
-                                    </select>
+                                    <div class="custom-select" data-id="upload-branch">
+                                        <select id="upload-branch" required>
+                                            <option value="">Select Branch</option>
+                                            <option value="CSE">CSE - Computer Science</option>
+                                            <option value="ECE">ECE - Electronics & Communication</option>
+                                            <option value="EEE">EEE - Electrical & Electronics</option>
+                                            <option value="ME">ME - Mechanical</option>
+                                            <option value="CE">CE - Civil</option>
+                                            <option value="IT">IT - Information Technology</option>
+                                            <option value="AI">AI - Artificial Intelligence</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Semester</label>
-                                    <select class="form-select" id="upload-semester" required>
-                                        <option value="">Select Semester</option>
-                                        <option value="1">Semester 1</option>
-                                        <option value="2">Semester 2</option>
-                                        <option value="3">Semester 3</option>
-                                        <option value="4">Semester 4</option>
-                                        <option value="5">Semester 5</option>
-                                        <option value="6">Semester 6</option>
-                                        <option value="7">Semester 7</option>
-                                        <option value="8">Semester 8</option>
-                                    </select>
+                                    <div class="custom-select" data-id="upload-semester">
+                                        <select id="upload-semester" required>
+                                            <option value="">Select Semester</option>
+                                            <option value="1">Semester 1</option><option value="2">Semester 2</option>
+                                            <option value="3">Semester 3</option><option value="4">Semester 4</option>
+                                            <option value="5">Semester 5</option><option value="6">Semester 6</option>
+                                            <option value="7">Semester 7</option><option value="8">Semester 8</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Regulation</label>
-                                    <select class="form-select" id="upload-regulation">
-                                        <option value="2019">2019</option>
-                                        <option value="2023">2023</option>
-                                        <option value="2027">2027</option>
-                                    </select>
+                                    <div class="custom-select" data-id="upload-regulation">
+                                        <select id="upload-regulation">
+                                            <option value="2019">2019</option>
+                                            <option value="2023">2023</option>
+                                            <option value="2027">2027</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
-
                             <div class="upload-zone" id="drop-zone">
                                 <input type="file" id="file-input" accept=".pdf" hidden>
                                 <div class="upload-icon"><i data-lucide="upload-cloud" style="width:48px;height:48px"></i></div>
@@ -963,7 +562,6 @@
                                 <p>or click to browse</p>
                                 <p class="text-sm text-muted" id="selected-file"></p>
                             </div>
-
                             <div style="margin-top:1.25rem">
                                 <button type="submit" class="btn btn-primary btn-lg" id="upload-btn">
                                     <span class="spinner" style="display:none"></span>
@@ -971,96 +569,58 @@
                                 </button>
                             </div>
                         </form>
-
-                        <!-- Upload Progress -->
-                        <div id="upload-progress" class="mt-md" style="display: none;">
+                        <div id="upload-progress" class="mt-md" style="display:none;">
                             <div class="flex items-center justify-between mb-sm">
                                 <span class="text-sm" id="progress-status">Processing...</span>
                                 <span class="text-sm font-medium" id="progress-percent">0%</span>
                             </div>
                             <div class="progress-bar-wrap">
-                                <div class="progress-bar-fill" id="progress-bar" style="width: 0%"></div>
+                                <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
                             </div>
                             <div class="mt-sm text-sm text-muted" id="progress-detail"></div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Uploaded Files -->
                 <div class="card">
-                    <div class="card-header">
-                        <h5>Uploaded Files</h5>
-                        <button class="btn btn-ghost btn-sm" onclick="loadUploadedFiles()">
-                            <i data-lucide="refresh-cw"></i> Refresh
-                        </button>
-                    </div>
+                    <div class="card-header"><h5>Uploaded Files</h5><button class="btn btn-ghost btn-sm" onclick="loadUploadedFiles()"><i data-lucide="refresh-cw"></i> Refresh</button></div>
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>Filename</th>
-                                    <th>Branch</th>
-                                    <th>Semester</th>
-                                    <th>Size</th>
-                                    <th>Uploaded</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="files-table">
-                                <tr><td class="td-empty" colspan="6">Loading...</td></tr>
-                            </tbody>
+                            <thead><tr><th>Filename</th><th>Branch</th><th>Semester</th><th>Size</th><th>Uploaded</th><th>Actions</th></tr></thead>
+                            <tbody id="files-table"><tr><td class="td-empty" colspan="6">Loading...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
             </section>
 
-            <!-- ═══════════════════════════════════════════════════════════
-                 Subjects Section
-                 ═══════════════════════════════════════════════════════════ -->
+            <!-- Subjects -->
             <section id="subjects-section" class="content-section">
                 <div class="page-header flex items-center justify-between">
-                    <div>
-                        <h2>Subjects</h2>
-                        <p>Browse and manage subjects in the knowledge graph</p>
-                    </div>
-                    <button class="btn btn-primary" onclick="openModal('addSubjectModal')">
-                        <i data-lucide="plus-circle"></i> Add Subject
-                    </button>
+                    <div><h2>Subjects</h2><p>Browse and manage subjects in the knowledge graph</p></div>
+                    <button class="btn btn-primary" onclick="openModal('addSubjectModal')"><i data-lucide="plus-circle"></i> Add Subject</button>
                 </div>
-
-                <!-- Filters -->
                 <div class="card mb-md">
                     <div class="card-body compact">
                         <div class="grid-4 gap-md">
-                            <div>
-                                <select class="form-select" id="filter-branch" onchange="loadSubjects()">
+                            <div class="custom-select" data-id="filter-branch" data-onchange="loadSubjects">
+                                <select id="filter-branch">
                                     <option value="">All Branches</option>
-                                    <option value="CSE">CSE</option>
-                                    <option value="ECE">ECE</option>
-                                    <option value="EEE">EEE</option>
-                                    <option value="ME">ME</option>
-                                    <option value="CE">CE</option>
+                                    <option value="CSE">CSE</option><option value="ECE">ECE</option>
+                                    <option value="EEE">EEE</option><option value="ME">ME</option><option value="CE">CE</option>
                                 </select>
                             </div>
-                            <div>
-                                <select class="form-select" id="filter-semester" onchange="loadSubjects()">
+                            <div class="custom-select" data-id="filter-semester" data-onchange="loadSubjects">
+                                <select id="filter-semester">
                                     <option value="">All Semesters</option>
-                                    <option value="1">Semester 1</option>
-                                    <option value="2">Semester 2</option>
-                                    <option value="3">Semester 3</option>
-                                    <option value="4">Semester 4</option>
-                                    <option value="5">Semester 5</option>
-                                    <option value="6">Semester 6</option>
-                                    <option value="7">Semester 7</option>
-                                    <option value="8">Semester 8</option>
+                                    <option value="1">Semester 1</option><option value="2">Semester 2</option>
+                                    <option value="3">Semester 3</option><option value="4">Semester 4</option>
+                                    <option value="5">Semester 5</option><option value="6">Semester 6</option>
+                                    <option value="7">Semester 7</option><option value="8">Semester 8</option>
                                 </select>
                             </div>
-                            <div>
-                                <select class="form-select" id="filter-regulation" onchange="loadSubjects()">
+                            <div class="custom-select" data-id="filter-regulation" data-onchange="loadSubjects">
+                                <select id="filter-regulation">
                                     <option value="">All Regulations</option>
-                                    <option value="2019">2019 Scheme</option>
-                                    <option value="2023">2023 Scheme</option>
-                                    <option value="2027">2027 Scheme</option>
+                                    <option value="2019">2019 Scheme</option><option value="2023">2023 Scheme</option><option value="2027">2027 Scheme</option>
                                 </select>
                             </div>
                             <div class="search-input-wrap">
@@ -1070,138 +630,79 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Subjects Grid -->
                 <div class="grid-3 gap-md" id="subjects-grid">
                     <div class="text-center text-muted" style="grid-column:1/-1;padding:2rem">Loading subjects...</div>
                 </div>
             </section>
 
-            <!-- ═══════════════════════════════════════════════════════════
-                 Search Section
-                 ═══════════════════════════════════════════════════════════ -->
+            <!-- Search -->
             <section id="search-section" class="content-section">
-                <div class="page-header">
-                    <h2>Search RAG</h2>
-                    <p>Query the syllabus knowledge base with semantic search</p>
-                </div>
-
+                <div class="page-header"><h2>Search RAG</h2><p>Query the syllabus knowledge base with semantic search</p></div>
                 <div class="card mb-md">
                     <div class="card-body">
                         <form id="search-form">
                             <div class="grid-4 gap-md mb-md" style="grid-template-columns:1fr auto auto auto">
-                                <div>
-                                    <input type="text" class="form-input form-input-lg" id="search-query" placeholder="Enter your search query..." required>
-                                </div>
-                                <div>
-                                    <select class="form-select form-input-lg" id="search-limit">
-                                        <option value="5">5 results</option>
-                                        <option value="10">10 results</option>
-                                        <option value="20">20 results</option>
+                                <div><input type="text" class="form-input form-input-lg" id="search-query" placeholder="Enter your search query..." required></div>
+                                <div class="custom-select" data-id="search-limit">
+                                    <select id="search-limit">
+                                        <option value="5">5 results</option><option value="10">10 results</option><option value="20">20 results</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <button type="submit" class="btn btn-primary btn-lg">
-                                        <i data-lucide="search"></i> Search
-                                    </button>
-                                </div>
+                                <div><button type="submit" class="btn btn-primary btn-lg"><i data-lucide="search"></i> Search</button></div>
                             </div>
                             <div class="grid-3 gap-md">
-                                <div>
-                                    <select class="form-select" id="search-branch">
-                                        <option value="">All Branches</option>
-                                        <option value="CSE">CSE</option>
-                                        <option value="ECE">ECE</option>
-                                    </select>
+                                <div class="custom-select" data-id="search-branch">
+                                    <select id="search-branch"><option value="">All Branches</option><option value="CSE">CSE</option><option value="ECE">ECE</option></select>
                                 </div>
-                                <div>
-                                    <select class="form-select" id="search-semester">
+                                <div class="custom-select" data-id="search-semester">
+                                    <select id="search-semester">
                                         <option value="">All Semesters</option>
-                                        <option value="1">Semester 1</option>
-                                        <option value="2">Semester 2</option>
-                                        <option value="3">Semester 3</option>
-                                        <option value="4">Semester 4</option>
-                                        <option value="5">Semester 5</option>
-                                        <option value="6">Semester 6</option>
-                                        <option value="7">Semester 7</option>
-                                        <option value="8">Semester 8</option>
+                                        <option value="1">Semester 1</option><option value="2">Semester 2</option>
+                                        <option value="3">Semester 3</option><option value="4">Semester 4</option>
+                                        <option value="5">Semester 5</option><option value="6">Semester 6</option>
+                                        <option value="7">Semester 7</option><option value="8">Semester 8</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <input type="text" class="form-input" id="search-subject-code" placeholder="Subject Code (optional)">
-                                </div>
+                                <div><input type="text" class="form-input" id="search-subject-code" placeholder="Subject Code (optional)"></div>
                             </div>
                         </form>
                     </div>
                 </div>
-
-                <div id="search-results">
-                    <p class="text-center text-muted" style="padding:2rem">Enter a query to search the syllabus database</p>
-                </div>
+                <div id="search-results"><p class="text-center text-muted" style="padding:2rem">Enter a query to search the syllabus database</p></div>
             </section>
 
-            <!-- ═══════════════════════════════════════════════════════════
-                 Jobs Section
-                 ═══════════════════════════════════════════════════════════ -->
+            <!-- Jobs -->
             <section id="jobs-section" class="content-section">
                 <div class="page-header flex items-center justify-between">
-                    <div>
-                        <h2>Processing Jobs</h2>
-                        <p>Track syllabus processing pipeline status</p>
-                    </div>
-                    <button class="btn btn-outline" onclick="loadJobs()">
-                        <i data-lucide="refresh-cw"></i> Refresh
-                    </button>
+                    <div><h2>Processing Jobs</h2><p>Track syllabus processing pipeline status</p></div>
+                    <button class="btn btn-outline" onclick="loadJobs()"><i data-lucide="refresh-cw"></i> Refresh</button>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>Job ID</th>
-                                    <th>File</th>
-                                    <th>Branch</th>
-                                    <th>Semester</th>
-                                    <th>Status</th>
-                                    <th>Progress</th>
-                                    <th>Started</th>
-                                </tr>
-                            </thead>
-                            <tbody id="jobs-table">
-                                <tr><td class="td-empty" colspan="7">Loading...</td></tr>
-                            </tbody>
+                            <thead><tr><th>Job ID</th><th>File</th><th>Branch</th><th>Semester</th><th>Status</th><th>Progress</th><th>Started</th></tr></thead>
+                            <tbody id="jobs-table"><tr><td class="td-empty" colspan="7">Loading...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
             </section>
 
-            <!-- ═══════════════════════════════════════════════════════════
-                 Settings Section
-                 ═══════════════════════════════════════════════════════════ -->
+            <!-- Settings -->
             <section id="settings-section" class="content-section">
-                <div class="page-header">
-                    <h2>Settings</h2>
-                    <p>System configuration and administration</p>
-                </div>
-
+                <div class="page-header"><h2>Settings</h2><p>System configuration and administration</p></div>
                 <div class="grid-2 gap-md">
                     <div class="card">
                         <div class="card-header"><h5>Neo4j Setup</h5></div>
                         <div class="card-body">
                             <p class="text-sm text-muted" style="margin-bottom:1rem">Initialize Neo4j with required constraints and indexes for the knowledge graph.</p>
-                            <button class="btn btn-primary" onclick="setupNeo4j()">
-                                <i data-lucide="database"></i> Setup Constraints
-                            </button>
+                            <button class="btn btn-primary" onclick="setupNeo4j()"><i data-lucide="database"></i> Setup Constraints</button>
                         </div>
                     </div>
                     <div class="card">
                         <div class="card-header"><h5 class="text-danger">Danger Zone</h5></div>
                         <div class="card-body">
                             <p class="text-sm text-muted" style="margin-bottom:1rem">Clear all data from the knowledge graph and embeddings. This action cannot be undone!</p>
-                            <button class="btn btn-destructive" onclick="confirmClearData()">
-                                <i data-lucide="trash-2"></i> Clear All Data
-                            </button>
+                            <button class="btn btn-destructive" onclick="confirmClearData()"><i data-lucide="trash-2"></i> Clear All Data</button>
                         </div>
                     </div>
                 </div>
@@ -1209,25 +710,21 @@
         </main>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════
-         Add Subject Modal
-         ═══════════════════════════════════════════════════════════════ -->
+    <!-- Add Subject Modal -->
     <div class="modal-overlay" id="addSubjectModal">
         <div class="modal-dialog modal-lg">
             <div class="modal-header">
                 <h5>Add Subject Manually</h5>
-                <button class="modal-close" onclick="closeModal('addSubjectModal')">
-                    <i data-lucide="x" style="width:18px;height:18px"></i>
-                </button>
+                <button class="modal-close" onclick="closeModal('addSubjectModal')"><i data-lucide="x" style="width:18px;height:18px"></i></button>
             </div>
             <div class="modal-body">
                 <form id="add-subject-form">
                     <div class="grid-3 gap-md">
-                        <div class="form-group" style="grid-column: 1">
+                        <div class="form-group" style="grid-column:1">
                             <label class="form-label">Subject Code *</label>
                             <input type="text" class="form-input" id="subject-code" required placeholder="e.g., CS201">
                         </div>
-                        <div class="form-group" style="grid-column: 2 / -1">
+                        <div class="form-group" style="grid-column:2/-1">
                             <label class="form-label">Subject Name *</label>
                             <input type="text" class="form-input" id="subject-name" required placeholder="e.g., Data Structures">
                         </div>
@@ -1237,53 +734,47 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Semester *</label>
-                            <select class="form-select" id="subject-semester" required>
-                                <option value="1">S1</option>
-                                <option value="2">S2</option>
-                                <option value="3" selected>S3</option>
-                                <option value="4">S4</option>
-                                <option value="5">S5</option>
-                                <option value="6">S6</option>
-                                <option value="7">S7</option>
-                                <option value="8">S8</option>
-                            </select>
+                            <div class="custom-select" data-id="subject-semester">
+                                <select id="subject-semester" required>
+                                    <option value="1">S1</option><option value="2">S2</option>
+                                    <option value="3" selected>S3</option><option value="4">S4</option>
+                                    <option value="5">S5</option><option value="6">S6</option>
+                                    <option value="7">S7</option><option value="8">S8</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Branch *</label>
-                            <select class="form-select" id="subject-branch" required>
-                                <option value="CSE">CSE</option>
-                                <option value="ECE">ECE</option>
-                                <option value="EEE">EEE</option>
-                                <option value="ME">ME</option>
-                                <option value="CE">CE</option>
-                            </select>
+                            <div class="custom-select" data-id="subject-branch">
+                                <select id="subject-branch" required>
+                                    <option value="CSE">CSE</option><option value="ECE">ECE</option>
+                                    <option value="EEE">EEE</option><option value="ME">ME</option><option value="CE">CE</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Regulation *</label>
-                            <select class="form-select" id="subject-regulation" required>
-                                <option value="2019">2019</option>
-                                <option value="2023">2023</option>
-                                <option value="2027">2027</option>
-                            </select>
+                            <div class="custom-select" data-id="subject-regulation">
+                                <select id="subject-regulation" required>
+                                    <option value="2019">2019</option><option value="2023">2023</option><option value="2027">2027</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Category</label>
-                            <select class="form-select" id="subject-category">
-                                <option value="PCC">PCC</option>
-                                <option value="BSC">BSC</option>
-                                <option value="ESC">ESC</option>
-                                <option value="OEC">OEC</option>
-                                <option value="HSS">HSS</option>
-                            </select>
+                            <div class="custom-select" data-id="subject-category">
+                                <select id="subject-category">
+                                    <option value="PCC">PCC</option><option value="BSC">BSC</option>
+                                    <option value="ESC">ESC</option><option value="OEC">OEC</option><option value="HSS">HSS</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('addSubjectModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="addSubject()">
-                    <i data-lucide="plus-circle"></i> Add Subject
-                </button>
+                <button class="btn btn-primary" onclick="addSubject()"><i data-lucide="plus-circle"></i> Add Subject</button>
             </div>
         </div>
     </div>
@@ -1293,13 +784,9 @@
         <div class="modal-dialog modal-xl">
             <div class="modal-header">
                 <h5 id="subject-detail-title">Subject Details</h5>
-                <button class="modal-close" onclick="closeModal('subjectDetailsModal')">
-                    <i data-lucide="x" style="width:18px;height:18px"></i>
-                </button>
+                <button class="modal-close" onclick="closeModal('subjectDetailsModal')"><i data-lucide="x" style="width:18px;height:18px"></i></button>
             </div>
-            <div class="modal-body" id="subject-detail-content">
-                Loading...
-            </div>
+            <div class="modal-body" id="subject-detail-content">Loading...</div>
         </div>
     </div>
 
@@ -1307,9 +794,6 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="/static/js/admin.js"></script>
-    <script>
-        // Initialize Lucide icons
-        lucide.createIcons();
-    </script>
+    <script>lucide.createIcons();</script>
 </body>
 </html>
