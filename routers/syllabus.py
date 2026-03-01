@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.auth import get_current_user, AuthenticatedUser
 from schemas.syllabus import BranchItem, SubjectListItem, SubjectDetail, ModuleItem
 from services.neo4j_service import neo4j_service
-from services.neo4j_service_v2 import neo4j_service_v2
+from services.neo4j_service_v2 import neo4j_service as neo4j_service_v2
 
 logger = logging.getLogger(__name__)
 

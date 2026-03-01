@@ -1,6 +1,6 @@
 # KTUfy Backend API - All Endpoints
 
-> Total: **65 endpoints** across 6 routers + main app
+> Total: **72 endpoints** across 8 routers + main app
 
 ---
 
@@ -65,6 +65,39 @@
 | GET | `/api/v1/syllabus/branches` | List all branches with subject counts | Required |
 | GET | `/api/v1/syllabus/subjects?branch=CSE&semester=S3` | List subjects (filterable by branch/semester) | Required |
 | GET | `/api/v1/syllabus/subject/{subjectCode}` | Full subject detail: modules, topics, textbooks, COs | Required |
+
+---
+
+## Learning (`/api/v1/learning`)
+
+### Quiz Generation
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/api/v1/learning/quiz/generate` | Generate a multiple-choice quiz (with DB caching) | Required |
+
+### Match Pair Generation
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/api/v1/learning/match/generate` | Generate term-definition match pairs (with DB caching) | Required |
+
+### Shared CRUD
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/api/v1/learning` | List all saved quizzes & match sets (filter: ?type=quiz\|match\|all) | Required |
+| GET | `/api/v1/learning/search?topic={topic}` | Search quizzes & match sets by topic (fuzzy match) | Required |
+| GET | `/api/v1/learning/{id}` | Get a specific quiz or match set by ID | Required |
+| DELETE | `/api/v1/learning/{id}` | Delete a saved quiz or match set | Required |
+
+---
+
+## Coding (`/api/v1/coding`)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/api/v1/coding/execute` | Execute code via Judge0 CE (python, c, cpp, java) | Required |
 
 ---
 

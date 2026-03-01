@@ -74,11 +74,11 @@ These endpoints are actively called by the frontend and have no fallback.
 - [x] Register router in `main.py`
 
 ### 2.5 `POST /api/v1/learning/quiz/generate`
-- [ ] Create a new router: `routers/learning.py`
-- [ ] Accept: `{ "topic": "...", "count": 5, "difficulty": "medium" }`
+- [x] Create a new router: `routers/learning.py`
+- [x] Accept: `{ "topic": "...", "count": 5, "difficulty": "medium" }`
   - `count` defaults to 5, `difficulty` defaults to `"medium"`
   - `difficulty` values: `"easy"` | `"medium"` | `"hard"`
-- [ ] Return:
+- [x] Return:
   ```json
   {
     "topic": "...",
@@ -90,59 +90,37 @@ These endpoints are actively called by the frontend and have no fallback.
     }]
   }
   ```
-- [ ] `correctAnswer` is a **0-based index** into `options`
-- [ ] Register router in `main.py`
+- [x] `correctAnswer` is a **0-based index** into `options`
+- [x] DB caching via `generated_content` table (`content_type = 'quiz'`)
+- [x] Fuzzy topic matching (exact → partial ilike)
+- [x] `force_regenerate` flag to bypass cache
+- [x] CRUD endpoints: GET list, GET by ID, DELETE, GET search
+- [x] Register router in `main.py`
 
 ### 2.6 `POST /api/v1/learning/match/generate`
-- [ ] Add to learning router
-- [ ] Accept: `{ "topic": "...", "count": 6 }`  (count defaults to 6)
-- [ ] Return: `{ "topic": "...", "pairs": [{ "term": "...", "definition": "..." }] }`
+- [x] Add to learning router
+- [x] Accept: `{ "topic": "...", "count": 6 }`  (count defaults to 6)
+- [x] Return: `{ "topic": "...", "pairs": [{ "term": "...", "definition": "..." }] }`
+- [x] DB caching via `generated_content` table (`content_type = 'qa'`)
+- [x] Fuzzy topic matching + `force_regenerate` flag
+- [x] Shared CRUD endpoints with quiz (filter by ?type=quiz|match|all)
 
 ---
 
 ## 3. Missing Endpoint — Should Implement (P2)
 
-### 3.1 `POST /api/v1/coding/execute`
-- [ ] Create a new router: `routers/coding.py`
-- [ ] Accept: `{ "source_code": "...", "language": "python", "stdin": "" }`
-- [ ] Supported languages: `python` (71), `c` (50), `cpp` (54), `java` (62) — Judge0 IDs
-- [ ] Return: `{ "stdout", "stderr", "compile_output", "status": { "id", "description" }, "time", "memory" }`
-- [ ] Implementation: Proxy to Judge0 CE (self-hosted or `ce.judge0.com`)
-- [ ] **Has fallback**: Frontend auto-falls back to free Judge0 CE public API if this fails
-- [ ] Register router in `main.py`
+### 3.1 `POST /api/v1/coding/execute` — DONE
+- [x] Create a new router: `routers/coding.py`
+- [x] Accept: `{ "source_code": "...", "language": "python", "stdin": "" }`
+- [x] Supported languages: `python` (71), `c` (50), `cpp` (54), `java` (62) — Judge0 IDs
+- [x] Return: `{ "stdout", "stderr", "compile_output", "status": { "id", "description" }, "time", "memory" }`
+- [x] Implementation: Proxy to Judge0 CE via httpx (async, base64-encoded, synchronous wait)
+- [x] Configurable via `JUDGE0_API_URL`, `JUDGE0_API_KEY`, `JUDGE0_API_HOST` env vars
+- [x] **Has fallback**: Frontend auto-falls back to free Judge0 CE public API if this fails
+- [x] Register router in `main.py`
 
 ---
 
-## 4. Database Schema Sync (P0)
-
-The frontend uses `ktufy_full_schema.sql` which defines tables the backend's `schema.sql` doesn't have.
-
-### 4.1 `public.users` table — Schema mismatch
-- [x] Frontend schema has a `semester` column (TEXT, e.g. "S6")
-- [x] Backend schema does not define the `users` table at all (relies on Supabase Auth)
-- [x] Fix: Ensure `public.users` table matches `ktufy_full_schema.sql` definition
-- [x] Run `ktufy_full_schema.sql` in Supabase, or create a migration to add missing columns
-
-### 4.2 New tables needed (frontend uses directly via Supabase client)
-The backend doesn't need REST endpoints for these, but the tables MUST exist in Supabase:
-- [ ] `public.ticklists` — Study checklists (CRUD via Supabase client with RLS)
-- [ ] `public.game_stats` — Learning Zone scores (UPSERT via Supabase client)
-- [ ] `public.coding_progress` — Coding Hub stats (UPSERT via Supabase client)
-- [ ] `public.study_dashboard` — Streak & study time (auto-created by trigger)
-- [ ] `public.user_notes` — Library notes (CRUD via Supabase client)
-- [ ] `public.user_bookmarks` — Library bookmarks (CRUD via Supabase client)
-- [ ] `public.exam_schedule` — Exam/event calendar (read via Supabase, populated by admin)
-
-### 4.3 Triggers needed -- create if not exist
-- [ ] `on_auth_user_created` — Auto-create `public.users` row when a user signs up
-- [ ] `create_study_dashboard` — Auto-create `public.study_dashboard` row on sign-up
-
-### 4.4 Action
-<!-- - [ ] Run `ktufy_full_schema.sql` in Supabase SQL Editor (it's idempotent) -->
-- [ ] Verify RLS policies are active: `SELECT * FROM pg_policies WHERE schemaname = 'public'`
-<!-- - [ ] Create `notes` storage bucket (public download, auth upload) -->
-
----
 
 ## 5. Backend Code Changes Summary
 
@@ -174,9 +152,6 @@ The backend doesn't need REST endpoints for these, but the tables MUST exist in 
 ## 6. Implementation Order (Fastest to Working MVP)
 
 ```
-Step 1: Database sync
-  → Run ktufy_full_schema.sql in Supabase
-  → Verify triggers and RLS
 
 Step 2: Fix existing endpoints (P0)
   → Fix GET /api/v1/auth/me response shape (flatten)
