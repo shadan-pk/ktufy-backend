@@ -9,6 +9,10 @@ from fastapi.responses import HTMLResponse, FileResponse
 from dotenv import load_dotenv
 import os
 
+# Load environment variables BEFORE importing routers/services
+# (services like Neo4j read env vars at import time)
+load_dotenv()
+
 # Import routers
 from routers import auth as auth_router
 from routers import chat as chat_router
@@ -20,9 +24,6 @@ from routers import flashcards as flashcards_router
 from app.auth import get_current_user, AuthenticatedUser
 from schemas.user import MessageResponse
 from utils.supabase_client import supabase_admin_client
-
-# Load environment variables
-load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(

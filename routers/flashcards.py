@@ -4,9 +4,9 @@ Handles flashcard generation using LLM with DB caching via generated_content tab
 """
 import json
 import logging
-from typing import List
+from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth import get_current_user, AuthenticatedUser
 from schemas.flashcard import (
@@ -54,10 +54,14 @@ Rules:
 def _find_cached(user_id: str, topic: str):
     """
     Check the generated_content table for an existing flashcard set
-    matching this user + topic (case-insensitive).
-    Returns the row dict or None.
+    matching this user + topic.  Uses fuzzy matching:
+      1. Try exact case-insensitive match first.
+      2. Fall back to partial / contains match (e.g. "data structure" matches
+         "Data Structures", "Advanced Data Structures", etc.).
+    Returns the best-matching row dict or None.
     """
     try:
+        # 1. Exact match (case-insensitive)
         response = (
             supabase_admin_client
             .table("generated_content")
@@ -71,9 +75,48 @@ def _find_cached(user_id: str, topic: str):
         )
         if response.data:
             return response.data[0]
+
+        # 2. Fuzzy / contains match  (e.g. "data structure" → "%data structure%")
+        response = (
+            supabase_admin_client
+            .table("generated_content")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("content_type", "flashcard")
+            .ilike("title", f"%{topic}%")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if response.data:
+            return response.data[0]
+
     except Exception as e:
         logger.warning(f"Cache lookup failed (non-fatal): {e}")
     return None
+
+
+def _search_by_topic(user_id: str, topic: str, limit: int = 10) -> list[dict]:
+    """
+    Return all flashcard sets for a user whose title matches the topic
+    (partial, case-insensitive).  Used by the GET /search endpoint.
+    """
+    try:
+        response = (
+            supabase_admin_client
+            .table("generated_content")
+            .select("id, title, content, created_at")
+            .eq("user_id", user_id)
+            .eq("content_type", "flashcard")
+            .ilike("title", f"%{topic}%")
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return response.data or []
+    except Exception as e:
+        logger.warning(f"Topic search failed: {e}")
+        return []
 
 
 def _save_to_db(user_id: str, topic: str, flashcards: list[dict]) -> dict:
@@ -108,9 +151,11 @@ async def generate_flashcards(
     """
     Generate flashcards for a given topic using AI.
 
-    - If flashcards for this topic already exist for the user, returns the cached version.
-    - Pass `force_regenerate: true` to bypass the cache and get fresh flashcards.
-    - Results are saved to the `generated_content` table for future lookups.
+    **Cache behaviour:**
+    - First checks the DB for flashcards matching the topic (exact or partial/fuzzy).
+    - If a match is found, returns it with `cached: true`.
+    - Pass `force_regenerate: true` to always generate a **new** set via the LLM.
+      The new set is saved as a separate entry — old sets are NOT deleted.
 
     **Requires authentication**: Bearer token in Authorization header
     """
@@ -160,6 +205,43 @@ async def generate_flashcards(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate flashcards: {str(e)}"
+        )
+
+
+# ─── GET /search (find by topic) ──────────────────────────────────────────────
+
+@router.get("/search", response_model=List[FlashcardSetSummary])
+async def search_flashcard_sets(
+    topic: str = Query(..., min_length=1, description="Topic to search for (partial match)"),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    limit: int = Query(default=10, ge=1, le=50),
+):
+    """
+    Search saved flashcard sets by topic name (partial, case-insensitive).
+
+    Use this to check if flashcards already exist for a topic before generating.
+
+    **Requires authentication**: Bearer token in Authorization header
+    """
+    try:
+        rows = _search_by_topic(current_user.user_id, topic, limit)
+        results = []
+        for row in rows:
+            content = row.get("content", {})
+            if isinstance(content, str):
+                content = json.loads(content)
+            results.append(FlashcardSetSummary(
+                id=row["id"],
+                topic=row["title"] or "Untitled",
+                card_count=len(content.get("flashcards", [])),
+                created_at=row["created_at"],
+            ))
+        return results
+    except Exception as e:
+        logger.error(f"Flashcard search failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search flashcard sets: {str(e)}"
         )
 
 

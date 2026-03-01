@@ -61,7 +61,13 @@ class Neo4jServiceV2:
         except ImportError:
             logger.warning("neo4j driver not installed")
         except Exception as e:
-            logger.error(f"Could not connect to Neo4j: {e}")
+            err_str = str(e)
+            if "Unauthorized" in err_str or "authentication failure" in err_str:
+                print(f"\u26a0\ufe0f  Neo4j V2 auth failed — check NEO4J_PASSWORD in .env (current URI: {uri})")
+                logger.warning(f"Neo4j V2 authentication failed. Verify credentials in .env file.")
+            else:
+                print(f"\u26a0\ufe0f  Neo4j V2 unavailable: {err_str[:120]}")
+                logger.error(f"Could not connect to Neo4j V2: {e}")
             self.driver = None
     
     def is_connected(self) -> bool:

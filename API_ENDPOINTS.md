@@ -1,6 +1,6 @@
 # KTUfy Backend API - All Endpoints
 
-> Total: **57 endpoints** across 4 routers + main app
+> Total: **62 endpoints** across 5 routers + main app
 
 ---
 
@@ -43,6 +43,18 @@
 | PUT | `/api/v1/chat/sessions/{session_id}` | Update session (title, model) | Required |
 | DELETE | `/api/v1/chat/sessions/{session_id}` | Delete session and all messages | Required |
 | GET | `/api/v1/chat/info` | Get chat service info (provider, features) | Required |
+
+---
+
+## Flashcards (`/api/v1/flashcards`)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/api/v1/flashcards/generate` | Generate flashcards for a topic (cached or fresh via LLM) | Required |
+| GET | `/api/v1/flashcards` | List all saved flashcard sets for current user | Required |
+| GET | `/api/v1/flashcards/search?topic={topic}` | Search flashcard sets by topic (fuzzy match) | Required |
+| GET | `/api/v1/flashcards/{id}` | Get a specific flashcard set by ID | Required |
+| DELETE | `/api/v1/flashcards/{id}` | Delete a saved flashcard set | Required |
 
 ---
 

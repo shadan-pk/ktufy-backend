@@ -57,7 +57,7 @@ These endpoints are actively called by the frontend and have no fallback.
 
 ### 2.2 `GET /api/v1/syllabus/branches`
 - [ ] Create a new router: `routers/syllabus.py`
-- [ ] Return all available branch codes from Neo4j KG
+- [ ] Return all available branch codes and modules(1-5) from Neo4j KG
 - [ ] Response: `[{ "code": "CSE", "name": "Computer Science & Engineering" }, ...]`
 
 ### 2.3 `GET /api/v1/syllabus/subjects?branch={branch}&semester={semester}`
