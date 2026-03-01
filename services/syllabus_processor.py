@@ -345,7 +345,7 @@ class SyllabusProcessor:
         supabase_client=None
     ) -> dict:
         """
-        Delete a subject from both KG and embeddings
+        Delete a subject from KG, embeddings, and syllabus DB
         
         Args:
             subject_code: Subject code to delete
@@ -356,7 +356,8 @@ class SyllabusProcessor:
         """
         result = {
             "knowledge_graph": False,
-            "embeddings_deleted": 0
+            "embeddings_deleted": 0,
+            "database_deleted": False,
         }
         
         # Delete from Neo4j
@@ -373,6 +374,15 @@ class SyllabusProcessor:
                 result["embeddings_deleted"] = deleted
             except Exception as e:
                 logger.error(f"Error deleting embeddings: {e}")
+        
+        # Delete from syllabus DB tables
+        try:
+            from utils.supabase_client import supabase_admin_client
+            result["database_deleted"] = syllabus_db_service.delete_subject(
+                supabase_admin_client, subject_code
+            )
+        except Exception as e:
+            logger.warning(f"Failed to delete subject from DB: {e}")
         
         return result
     

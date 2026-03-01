@@ -273,23 +273,21 @@ async def create_subject(subject: SubjectCreate):
 @router.delete("/subjects/{subject_code}", summary="Delete a subject")
 async def delete_subject(subject_code: str):
     """
-    Delete a subject from both knowledge graph and embeddings
+    Delete a subject from knowledge graph, embeddings, and syllabus database
     """
-    if not neo4j_service.is_connected():
-        raise HTTPException(status_code=503, detail="Neo4j not connected")
-    
     result = syllabus_processor.delete_subject(
         subject_code=subject_code,
         supabase_client=supabase_admin_client
     )
     
-    if not result["knowledge_graph"]:
+    if not result["knowledge_graph"] and not result.get("database_deleted"):
         raise HTTPException(status_code=404, detail="Subject not found")
     
     return {
         "message": "Subject deleted successfully",
         "subject_code": subject_code,
-        "embeddings_deleted": result["embeddings_deleted"]
+        "embeddings_deleted": result["embeddings_deleted"],
+        "database_deleted": result.get("database_deleted", False),
     }
 
 

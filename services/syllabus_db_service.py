@@ -131,6 +131,7 @@ class SyllabusDBService:
 
         for subject in structured_data.get("subjects", []):
             try:
+                logger.info(f"DB store: subject {subject.get('code')} - {subject.get('name')}")
                 subj_row = self.upsert_subject(admin_client, subject, semester, branch, regulation)
                 if not subj_row:
                     stats["errors"].append(f"Failed to store subject {subject.get('code')}")
@@ -138,6 +139,8 @@ class SyllabusDBService:
                 stats["subjects_stored"] += 1
 
                 for module in subject.get("modules", []):
+                    mod_name = module.get("name", f"Module {module.get('number')}")
+                    logger.info(f"  DB store: module {module.get('number')} - '{mod_name}' (keys: {list(module.keys())})")
                     mod_row = self.upsert_module(admin_client, module, subject["code"], regulation)
                     if not mod_row:
                         stats["errors"].append(f"Failed to store module {subject['code']} M{module.get('number')}")
@@ -146,6 +149,7 @@ class SyllabusDBService:
 
                     # Topics come from module["topics"] (raw list from LLM)
                     topics = module.get("topics", module.get("topics_raw", []))
+                    logger.info(f"    DB store: {len(topics)} topics for module {module.get('number')}")
                     count = self.save_topics(admin_client, mod_row["id"], topics)
                     stats["topics_stored"] += count
 

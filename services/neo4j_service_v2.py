@@ -242,7 +242,7 @@ class Neo4jServiceV2:
         query = """
         MATCH (s:Subject {code: $code, regulation: $regulation})
         OPTIONAL MATCH (s)-[:HAS_MODULE]->(m:Module)
-        OPTIONAL MATCH (m)-[:CONTAINS]->(c:Concept)
+        OPTIONAL MATCH (m)-[:CONTAINS]->(c)
         WITH s, m, collect(DISTINCT c) as concepts
         ORDER BY m.number
         WITH s, collect({module: m, concepts: concepts}) as modules_data
@@ -296,7 +296,7 @@ class Neo4jServiceV2:
         MATCH (s:Subject)
         {where_clause}
         OPTIONAL MATCH (s)-[:HAS_MODULE]->(m:Module)
-        OPTIONAL MATCH (m)-[:CONTAINS]->(c:Concept)
+        OPTIONAL MATCH (m)-[:CONTAINS]->(c)
         RETURN s, count(DISTINCT m) as module_count, count(DISTINCT c) as concept_count
         ORDER BY s.semester, s.code
         """
@@ -358,7 +358,7 @@ class Neo4jServiceV2:
         
         query = """
         MATCH (s:Subject {code: $code, regulation: $regulation})-[:HAS_MODULE]->(m:Module)
-        OPTIONAL MATCH (m)-[:CONTAINS]->(c:Concept)
+        OPTIONAL MATCH (m)-[:CONTAINS]->(c)
         RETURN m, collect(c) as concepts
         ORDER BY m.number
         """
@@ -687,8 +687,8 @@ class Neo4jServiceV2:
         
         query = """
         MATCH (s:Subject) WITH count(s) as subjects
-        MATCH (m:Module) WITH subjects, count(m) as modules
-        MATCH (c:Concept) WITH subjects, modules, count(c) as concepts
+        OPTIONAL MATCH (m:Module) WITH subjects, count(m) as modules
+        OPTIONAL MATCH (c:Concept) WITH subjects, modules, count(c) as concepts
         MATCH ()-[r]->() WITH subjects, modules, concepts, count(r) as relationships
         MATCH (sub:Subject) WITH subjects, modules, concepts, relationships, 
               collect(DISTINCT sub.branch) as branches,
@@ -734,7 +734,7 @@ class Neo4jServiceV2:
         query = """
         MATCH (s:Subject {code: $code, regulation: $regulation})
         OPTIONAL MATCH (s)-[:HAS_MODULE]->(m:Module)
-        OPTIONAL MATCH (m)-[:CONTAINS]->(c:Concept)
+        OPTIONAL MATCH (m)-[:CONTAINS]->(c)
         DETACH DELETE s, m, c
         RETURN count(s) as deleted
         """
