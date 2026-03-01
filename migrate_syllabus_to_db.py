@@ -21,19 +21,15 @@ def migrate():
     load_dotenv()
 
     from services.neo4j_service_v2 import neo4j_service as neo4j_v2
-    from services.neo4j_service import neo4j_service as neo4j_v1
     from utils.supabase_client import supabase_admin_client
     from services.syllabus_db_service import syllabus_db_service
 
-    # Pick whichever Neo4j service is connected
+    # Use Neo4j V2 service
     if neo4j_v2.is_connected():
         svc = neo4j_v2
         version = "v2"
-    elif neo4j_v1.is_connected():
-        svc = neo4j_v1
-        version = "v1"
     else:
-        logger.error("Neither Neo4j V1 nor V2 is connected. Aborting.")
+        logger.error("Neo4j is not connected. Aborting.")
         sys.exit(1)
 
     logger.info(f"Using Neo4j {version}")

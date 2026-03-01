@@ -14,8 +14,7 @@ from services.syllabus_db_service import syllabus_db_service
 from utils.supabase_client import supabase_client
 
 # Neo4j fallback (only used if Supabase tables are empty)
-from services.neo4j_service import neo4j_service
-from services.neo4j_service_v2 import neo4j_service as neo4j_service_v2
+from services.neo4j_service_v2 import neo4j_service
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +39,9 @@ router = APIRouter(
 
 
 def _get_neo4j():
-    """Return the first connected Neo4j service (prefer V2, fall back to V1)."""
-    if neo4j_service_v2.is_connected():
-        return neo4j_service_v2, "v2"
+    """Return the Neo4j service if connected."""
     if neo4j_service.is_connected():
-        return neo4j_service, "v1"
+        return neo4j_service, "v2"
     return None, None
 
 

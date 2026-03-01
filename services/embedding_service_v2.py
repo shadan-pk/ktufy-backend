@@ -350,6 +350,50 @@ class EmbeddingServiceV2:
         result = query.execute()
         return len(result.data) if result.data else 0
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # V1 Compatibility Shims
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def search_similar(
+        self,
+        supabase_client,
+        query: str,
+        limit: int = 5,
+        semester: Optional[int] = None,
+        branch: Optional[str] = None,
+        subject_code: Optional[str] = None,
+        chunk_types: List[str] = None,
+    ) -> List[dict]:
+        """V1 compat → calls search()"""
+        return self.search(
+            supabase_client=supabase_client,
+            query=query,
+            limit=limit,
+            chunk_types=chunk_types,
+            semester=semester,
+            branch=branch,
+            subject_code=subject_code,
+        )
+
+    def delete_embeddings(
+        self,
+        supabase_client,
+        semester: Optional[int] = None,
+        branch: Optional[str] = None,
+        subject_code: Optional[str] = None,
+    ) -> int:
+        """V1 compat → deletes embeddings with optional filters"""
+        if subject_code:
+            return self.delete_by_subject(supabase_client, subject_code)
+        # Fallback: delete by fields
+        q = supabase_client.table("syllabus_embeddings").delete()
+        if semester:
+            q = q.eq("semester", semester)
+        if branch:
+            q = q.eq("branch", branch)
+        result = q.execute()
+        return len(result.data) if result.data else 0
+
 
 # Global instance
 embedding_service = EmbeddingServiceV2()

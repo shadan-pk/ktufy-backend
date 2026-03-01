@@ -760,6 +760,102 @@ class Neo4jServiceV2:
             record = result.single()
             return {"deleted_nodes": record["deleted"] if record else 0}
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # V1 Compatibility Shims
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def setup_constraints(self):
+        """V1 compat → calls setup_schema()"""
+        return self.setup_schema()
+
+    def clear_all_data(self) -> bool:
+        """V1 compat → calls clear_all(), returns bool"""
+        result = self.clear_all()
+        return result.get("deleted_nodes", 0) > 0
+
+    def create_topic(self, topic_data: dict, module_id: str) -> dict:
+        """V1 compat → calls create_concept()"""
+        return self.create_concept(topic_data, module_id)
+
+    def search_topics(self, query: str, limit: int = 10) -> List[dict]:
+        """V1 compat → calls search_concepts()"""
+        return self.search_concepts(query, limit)
+
+    def create_prerequisite(self, from_code: str, to_code: str, reason: str = "") -> bool:
+        """V1 compat → calls create_subject_prerequisite()"""
+        return self.create_subject_prerequisite(from_code, to_code, reason=reason)
+
+    def create_relationship(self, from_id: str, to_id: str, rel_type: str, properties: dict = None) -> bool:
+        """V1 compat → calls create_semantic_relationship()"""
+        return self.create_semantic_relationship(from_id, to_id, rel_type, properties)
+
+    def get_concept_relationships(self, concept_id: str) -> List[dict]:
+        """V1 compat → returns relationships for a concept in v1 format"""
+        related = self.get_related_concepts(concept_id)
+        results = []
+        for item in related:
+            concept = item.get("concept", {})
+            for rel_type in item.get("relationship_types", ["RELATED_TO"]):
+                results.append({
+                    "type": rel_type,
+                    "target_id": concept.get("id", ""),
+                    "target_name": concept.get("name", concept.get("display_name", "")),
+                    "concept": concept,
+                })
+        return results
+
+    def get_topic_prerequisites(self, concept_id: str) -> List[dict]:
+        """V1 compat → get prerequisites for a concept"""
+        prereqs = self.get_prerequisites(concept_id, depth=3)
+        return [
+            {
+                "id": p["concept"].get("id", ""),
+                "name": p["concept"].get("name", ""),
+                "distance": p.get("distance", 1),
+            }
+            for p in prereqs
+        ]
+
+    def get_hierarchy(self, concept_id: str) -> dict:
+        """V1 compat → calls get_type_hierarchy()"""
+        return self.get_type_hierarchy(concept_id) or {"parents": [], "children": []}
+
+    def explore_graph(self, concept_id: str, depth: int = 2) -> dict:
+        """Explore the knowledge graph around a concept up to given depth"""
+        if not self.driver:
+            raise ConnectionError("Neo4j not connected")
+
+        query = """
+        MATCH path = (center:Concept {id: $id})-[r*1..$depth]-(connected)
+        WHERE all(node IN nodes(path) WHERE node:Concept OR node:Module OR node:Subject)
+        UNWIND nodes(path) AS n
+        UNWIND relationships(path) AS rel
+        WITH collect(DISTINCT n) AS all_nodes, collect(DISTINCT rel) AS all_rels
+        RETURN all_nodes, all_rels
+        """
+
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, id=concept_id, depth=depth)
+                record = result.single()
+
+                if not record:
+                    return {"nodes": [], "edges": []}
+
+                nodes = [dict(n) for n in record["all_nodes"]]
+                edges = [
+                    {
+                        "from": dict(r.start_node).get("id", ""),
+                        "to": dict(r.end_node).get("id", ""),
+                        "type": r.type,
+                    }
+                    for r in record["all_rels"]
+                ]
+                return {"nodes": nodes, "edges": edges}
+        except Exception as e:
+            logger.error(f"explore_graph error: {e}")
+            return {"nodes": [], "edges": []}
+
 
 # Global instance
 neo4j_service = Neo4jServiceV2()

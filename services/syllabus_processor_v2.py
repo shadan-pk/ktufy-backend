@@ -344,6 +344,71 @@ class SyllabusProcessorV2:
             logger.warning(f"Failed to delete subject from DB: {e}")
         
         return result
+    
+    def add_subject_manual(
+        self,
+        subject_data: dict,
+        supabase_client=None
+    ) -> dict:
+        """
+        Manually add a subject to the knowledge graph and embeddings
+        
+        Args:
+            subject_data: Subject information with modules and topics
+            supabase_client: Supabase client for embeddings
+            
+        Returns:
+            Result statistics
+        """
+        result = {
+            "knowledge_graph": None,
+            "embeddings": None,
+            "errors": []
+        }
+        
+        try:
+            semester = subject_data.get("semester", 0)
+            branch = subject_data.get("branch", "")
+            regulation = subject_data.get("regulation", "2019")
+            
+            # Add to Neo4j
+            if neo4j_service.is_connected():
+                neo4j_service.create_subject(subject_data, semester, branch, regulation)
+                
+                for module in subject_data.get("modules", []):
+                    neo4j_service.create_module(module, subject_data["code"], regulation)
+                    module_id = module.get("id", f"{subject_data['code'].lower()}_m{module['number']}")
+                    
+                    for topic in module.get("topics", []):
+                        neo4j_service.create_concept(topic, module_id)
+                
+                result["knowledge_graph"] = {"status": "success"}
+            
+            # Add embeddings
+            if supabase_client and embedding_service.is_ready():
+                content = f"Subject: {subject_data.get('name', '')}\nCode: {subject_data.get('code', '')}"
+                for module in subject_data.get("modules", []):
+                    for topic in module.get("topics", []):
+                        topic_name = topic.get("name", "") if isinstance(topic, dict) else str(topic)
+                        content += f"\nTopic: {topic_name}"
+                
+                embedding = embedding_service.generate_embedding(content)
+                supabase_client.table("syllabus_embeddings").insert({
+                    "content": content,
+                    "embedding": embedding,
+                    "subject_code": subject_data.get("code", ""),
+                    "subject_name": subject_data.get("name", ""),
+                    "chunk_type": "syllabus_content",
+                    "semester": semester,
+                    "branch": branch,
+                    "regulation": regulation,
+                }).execute()
+                result["embeddings"] = {"status": "success", "chunks_stored": 1}
+            
+        except Exception as e:
+            result["errors"].append(str(e))
+        
+        return result
 
 
 # Global instance

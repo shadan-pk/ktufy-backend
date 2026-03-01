@@ -10,8 +10,8 @@ import httpx
 from groq import Groq
 
 from services.query_router import query_router, QueryType
-from services.neo4j_service import neo4j_service
-from services.embedding_service import embedding_service
+from services.neo4j_service_v2 import neo4j_service
+from services.embedding_service_v2 import embedding_service
 from utils.supabase_client import supabase_admin_client
 
 logger = logging.getLogger(__name__)

@@ -18,9 +18,9 @@ from schemas.admin import (
     UploadedFileResponse, UploadedFilesListResponse,
     ModuleCreate, TopicCreate, RelationshipCreate
 )
-from services.syllabus_processor import syllabus_processor
-from services.neo4j_service import neo4j_service
-from services.embedding_service import embedding_service
+from services.syllabus_processor_v2 import syllabus_processor
+from services.neo4j_service_v2 import neo4j_service
+from services.embedding_service_v2 import embedding_service
 from services.active_users import active_user_tracker
 from utils.supabase_client import supabase_admin_client
 
