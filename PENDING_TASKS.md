@@ -45,12 +45,15 @@ The frontend expects specific response shapes that differ from what the backend 
 
 These endpoints are actively called by the frontend and have no fallback.
 
-### 2.1 `POST /api/v1/flashcards/generate`
-- [ ] Create a new router: `routers/flashcards.py`
-- [ ] Accept: `{ "topic": "string", "count": 10 }`  (count defaults to 10)
-- [ ] Return: `{ "topic": "...", "flashcards": [{ "front": "...", "back": "..." }] }`
-- [ ] Use Groq/Ollama LLM to generate flashcards for the given topic
-- [ ] Register router in `main.py`
+### 2.1 `POST /api/v1/flashcards/generate` — DONE
+- [x] Create a new router: `routers/flashcards.py`
+- [x] Accept: `{ "topic": "string", "count": 10, "force_regenerate": false }`  (count defaults to 10)
+- [x] Return: `{ "id": "uuid", "topic": "...", "flashcards": [...], "cached": bool, "created_at": "..." }`
+- [x] Use Groq/Ollama LLM to generate flashcards for the given topic
+- [x] Cache results in `generated_content` table (`content_type = 'flashcard'`)
+- [x] Return cached version if topic already generated (bypass with `force_regenerate: true`)
+- [x] Additional endpoints: `GET /` (list sets), `GET /{id}`, `DELETE /{id}`
+- [x] Register router in `main.py`
 
 ### 2.2 `GET /api/v1/syllabus/branches`
 - [ ] Create a new router: `routers/syllabus.py`
@@ -155,7 +158,7 @@ The backend doesn't need REST endpoints for these, but the tables MUST exist in 
 ### New routers to create:
 | Router | File | Endpoints |
 |--------|------|-----------|
-| Flashcards | `routers/flashcards.py` | `POST /api/v1/flashcards/generate` |
+| Flashcards | `routers/flashcards.py` | `POST /generate`, `GET /`, `GET /{id}`, `DELETE /{id}` |
 | Syllabus | `routers/syllabus.py` | `GET /branches`, `GET /subjects`, `GET /subject/{code}` |
 | Learning | `routers/learning.py` | `POST /quiz/generate`, `POST /match/generate` |
 | Coding | `routers/coding.py` | `POST /execute` |

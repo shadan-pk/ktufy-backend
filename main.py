@@ -14,6 +14,7 @@ from routers import auth as auth_router
 from routers import chat as chat_router
 from routers import admin as admin_router
 from routers import admin_v2 as admin_v2_router  # V2 KG-RAG corrected router
+from routers import flashcards as flashcards_router
 
 # Import auth dependencies for the users route alias
 from app.auth import get_current_user, AuthenticatedUser
@@ -40,6 +41,7 @@ app.include_router(auth_router.router)
 app.include_router(chat_router.router)
 app.include_router(admin_router.router)
 app.include_router(admin_v2_router.router)  # V2 endpoints at /api/v2/admin
+app.include_router(flashcards_router.router)
 
 # Configure CORS
 app.add_middleware(
