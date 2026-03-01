@@ -1,6 +1,8 @@
 """
 Syllabus Router
-Browse subjects, modules, and topics from the Neo4j Knowledge Graph
+Browse subjects, modules, and topics.
+Primary source: Supabase (syllabus_subjects/modules/topics tables)
+Fallback: Neo4j Knowledge Graph (for legacy data)
 """
 import logging
 from typing import List, Optional
@@ -8,6 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth import get_current_user, AuthenticatedUser
 from schemas.syllabus import BranchItem, SubjectListItem, SubjectDetail, ModuleItem
+from services.syllabus_db_service import syllabus_db_service
+from utils.supabase_client import supabase_client
+
+# Neo4j fallback (only used if Supabase tables are empty)
 from services.neo4j_service import neo4j_service
 from services.neo4j_service_v2 import neo4j_service as neo4j_service_v2
 
@@ -49,15 +55,31 @@ async def get_branches(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Return all available branches (departments) that have subjects in the KG.
+    Return all available branches (departments) that have subjects.
 
     **Requires authentication**: Bearer token in Authorization header
     """
+    try:
+        # ── Primary: Supabase ──
+        branches_db = syllabus_db_service.get_branches(supabase_client)
+        if branches_db:
+            return [
+                BranchItem(
+                    code=b["code"],
+                    name=BRANCH_NAMES.get(b["code"], b["code"]),
+                    subject_count=b["count"],
+                )
+                for b in branches_db
+            ]
+    except Exception as e:
+        logger.warning(f"Supabase branch query failed, falling back to Neo4j: {e}")
+
+    # ── Fallback: Neo4j ──
     svc, _ = _get_neo4j()
     if not svc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge Graph (Neo4j) is not connected"
+            detail="No data source available (Supabase tables empty and Neo4j not connected)"
         )
 
     try:
@@ -101,21 +123,43 @@ async def get_subjects(
 
     **Requires authentication**: Bearer token in Authorization header
     """
+    # Normalise semester: accept "S3" or "3" → int 3
+    sem_int = None
+    if semester:
+        sem_clean = semester.upper().lstrip("S")
+        if sem_clean.isdigit():
+            sem_int = int(sem_clean)
+
+    try:
+        # ── Primary: Supabase ──
+        subjects_db = syllabus_db_service.get_subjects(
+            client=supabase_client,
+            branch=branch.upper() if branch else None,
+            semester=sem_int,
+        )
+        if subjects_db:
+            return [
+                SubjectListItem(
+                    name=s.get("name", ""),
+                    code=s.get("code", ""),
+                    credits=s.get("credits"),
+                    semester=s.get("semester"),
+                    module_count=s.get("module_count", 0),
+                )
+                for s in subjects_db
+            ]
+    except Exception as e:
+        logger.warning(f"Supabase subjects query failed, falling back to Neo4j: {e}")
+
+    # ── Fallback: Neo4j ──
     svc, version = _get_neo4j()
     if not svc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge Graph (Neo4j) is not connected"
+            detail="No data source available"
         )
 
     try:
-        # Normalise semester: accept "S3" or "3" → int 3
-        sem_int = None
-        if semester:
-            sem_clean = semester.upper().lstrip("S")
-            if sem_clean.isdigit():
-                sem_int = int(sem_clean)
-
         subjects = svc.get_all_subjects(
             semester=sem_int,
             branch=branch.upper() if branch else None,
@@ -154,36 +198,65 @@ async def get_subject_detail(
 
     **Requires authentication**: Bearer token in Authorization header
     """
+    try:
+        # ── Primary: Supabase ──
+        subject = syllabus_db_service.get_subject_detail(supabase_client, subject_code)
+        if subject:
+            modules = []
+            for m in subject.get("modules", []):
+                modules.append(ModuleItem(
+                    module_number=m.get("module_number", 0),
+                    title=m.get("name", f"Module {m.get('module_number', '?')}"),
+                    hours=m.get("hours"),
+                    topics=m.get("topics", []),
+                ))
+            modules.sort(key=lambda x: x.module_number)
+
+            textbooks = subject.get("textbooks", [])
+            if isinstance(textbooks, str):
+                textbooks = [textbooks]
+            course_outcomes = subject.get("course_outcomes", subject.get("objectives", []))
+            if isinstance(course_outcomes, str):
+                course_outcomes = [course_outcomes]
+
+            return SubjectDetail(
+                subject_name=subject.get("name", ""),
+                subject_code=subject.get("code", subject_code),
+                credits=subject.get("credits"),
+                semester=subject.get("semester"),
+                branch=subject.get("branch"),
+                modules=modules,
+                course_outcomes=course_outcomes or [],
+                textbooks=textbooks or [],
+                references=subject.get("references", []) or [],
+            )
+    except Exception as e:
+        logger.warning(f"Supabase subject detail query failed, falling back to Neo4j: {e}")
+
+    # ── Fallback: Neo4j ──
     svc, version = _get_neo4j()
     if not svc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Knowledge Graph (Neo4j) is not connected"
+            detail="No data source available"
         )
 
     try:
-        # Try exact code first (e.g. "CST 201")
         subject = svc.get_subject(subject_code)
-
-        # If not found, try without spaces (e.g. "CST201" → search)
         if not subject:
             subject = svc.get_subject(subject_code.replace(" ", ""))
-
-        # If still not found, do a fuzzy lookup
         if not subject:
             subject = _fuzzy_subject_lookup(svc, subject_code)
 
         if not subject:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Subject '{subject_code}' not found in Knowledge Graph"
+                detail=f"Subject '{subject_code}' not found"
             )
 
-        # Fetch modules with topics
         modules_raw = subject.get("modules", [])
         modules = []
         for m in modules_raw:
-            # V2 stores topics as "concepts", V1 as "topics"
             topic_items = m.get("concepts", m.get("topics", []))
             topic_names = []
             for t in topic_items:
@@ -198,11 +271,8 @@ async def get_subject_detail(
                 hours=m.get("hours") if m.get("hours") else None,
                 topics=topic_names,
             ))
-
-        # Sort modules by number
         modules.sort(key=lambda x: x.module_number)
 
-        # Extract textbooks / course_outcomes (stored as lists on Subject node)
         textbooks = subject.get("textbooks", [])
         if isinstance(textbooks, str):
             textbooks = [textbooks]

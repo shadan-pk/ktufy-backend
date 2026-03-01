@@ -12,6 +12,7 @@ from services.pdf_processor import pdf_processor
 from services.llm_extractor_v2 import llm_extractor
 from services.neo4j_service_v2 import neo4j_service
 from services.embedding_service_v2 import embedding_service
+from services.syllabus_db_service import syllabus_db_service
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +176,35 @@ class SyllabusProcessorV2:
             
             if job:
                 job.total_subjects = subjects_count
+                job.progress = 35
+                job.message = f"Found {subjects_count} subjects, {concepts_count} concepts. Storing to database..."
+            
+            # ═══════════════════════════════════════════════════════════════
+            # Step 2.5: Store structured syllabus to Supabase (for display)
+            # ═══════════════════════════════════════════════════════════════
+            logger.info("Step 2.5: Storing structured syllabus data to Supabase")
+            
+            if supabase_client:
+                try:
+                    from utils.supabase_client import supabase_admin_client
+                    db_stats = syllabus_db_service.store_syllabus(
+                        admin_client=supabase_admin_client,
+                        structured_data=structured_data,
+                        semester=semester,
+                        branch=branch,
+                        regulation=regulation,
+                    )
+                    result["database_store"] = {**db_stats, "status": "success"}
+                    logger.info(f"Stored to DB: {db_stats['subjects_stored']} subjects, {db_stats['modules_stored']} modules, {db_stats['topics_stored']} topics")
+                except Exception as db_err:
+                    logger.warning(f"Failed to store syllabus to DB (non-fatal): {db_err}")
+                    result["database_store"] = {"status": "failed", "error": str(db_err)}
+            else:
+                result["database_store"] = {"status": "skipped", "reason": "Supabase client not provided"}
+            
+            if job:
                 job.progress = 40
-                job.message = f"Found {subjects_count} subjects, {concepts_count} concepts. Building knowledge graph..."
+                job.message = f"Stored to DB. Building knowledge graph..."
             
             # ═══════════════════════════════════════════════════════════════
             # Step 3: Load into Neo4j Knowledge Graph (V2)
@@ -289,10 +317,11 @@ class SyllabusProcessorV2:
         regulation: str = "2019",
         supabase_client=None
     ) -> dict:
-        """Delete a subject from both KG and embeddings"""
+        """Delete a subject from KG, embeddings, and syllabus DB"""
         result = {
             "knowledge_graph": False,
-            "embeddings_deleted": 0
+            "embeddings_deleted": 0,
+            "database_deleted": False,
         }
         
         # Delete from Neo4j
@@ -304,6 +333,15 @@ class SyllabusProcessorV2:
             result["embeddings_deleted"] = embedding_service.delete_by_subject(
                 supabase_client, subject_code
             )
+        
+        # Delete from syllabus DB tables
+        try:
+            from utils.supabase_client import supabase_admin_client
+            result["database_deleted"] = syllabus_db_service.delete_subject(
+                supabase_admin_client, subject_code, regulation
+            )
+        except Exception as e:
+            logger.warning(f"Failed to delete subject from DB: {e}")
         
         return result
 

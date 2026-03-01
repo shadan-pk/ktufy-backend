@@ -12,6 +12,7 @@ from services.pdf_processor import pdf_processor
 from services.llm_extractor import llm_extractor
 from services.neo4j_service import neo4j_service
 from services.embedding_service import embedding_service
+from services.syllabus_db_service import syllabus_db_service
 
 logger = logging.getLogger(__name__)
 
@@ -168,8 +169,33 @@ class SyllabusProcessor:
             
             if job:
                 job.total_subjects = subjects_count
+                job.progress = 45
+                job.message = f"Found {subjects_count} subjects. Storing to database..."
+            
+            # ═══════════════════════════════════════════════════════════════
+            # Step 2.5: Store structured syllabus to Supabase (for display)
+            # ═══════════════════════════════════════════════════════════════
+            logger.info("Step 2.5: Storing structured syllabus data to Supabase")
+            
+            if supabase_client:
+                try:
+                    from utils.supabase_client import supabase_admin_client
+                    db_stats = syllabus_db_service.store_syllabus(
+                        admin_client=supabase_admin_client,
+                        structured_data=structured_data,
+                        semester=semester,
+                        branch=branch,
+                        regulation=regulation,
+                    )
+                    result["database_store"] = {**db_stats, "status": "success"}
+                    logger.info(f"Stored to DB: {db_stats['subjects_stored']} subjects, {db_stats['modules_stored']} modules, {db_stats['topics_stored']} topics")
+                except Exception as db_err:
+                    logger.warning(f"Failed to store syllabus to DB (non-fatal): {db_err}")
+                    result["database_store"] = {"status": "failed", "error": str(db_err)}
+            
+            if job:
                 job.progress = 50
-                job.message = f"Found {subjects_count} subjects. Building knowledge graph..."
+                job.message = f"Stored to DB. Building knowledge graph..."
             
             # ═══════════════════════════════════════════════════════════════
             # Step 3: Load into Neo4j Knowledge Graph
