@@ -6,10 +6,13 @@ cvert uses Sharp (Node.js); Python equivalent is Pillow.
 Handles: convert, compress, resize
 """
 import io
+import logging
 from pathlib import Path
 from typing import Optional
 
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 
 # Map frontend format strings to Pillow format names

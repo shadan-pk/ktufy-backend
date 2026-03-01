@@ -7,9 +7,11 @@ Audio:  convert, trim, merge, normalize
 Image:  convert, compress, resize
 PDF:    merge, split, compress, images-to-pdf, pdf-to-images
 """
+import logging
 import os
 import shutil
 import tempfile
+import traceback
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -23,6 +25,8 @@ import services.media.video_service as video_service
 import services.media.audio_service as audio_service
 import services.media.image_service as image_service
 import services.media.pdf_service as pdf_service
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -110,6 +114,7 @@ async def video_convert(
     try:
         await video_service.convert_video(input_path, output_path, output_format, quality)
     except Exception as e:
+        logger.error(f"Video convert failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -136,6 +141,7 @@ async def video_extract_audio(
     try:
         await video_service.extract_audio(input_path, output_path, output_format)
     except Exception as e:
+        logger.error(f"Extract audio failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -162,6 +168,7 @@ async def video_to_gif(
     try:
         await video_service.video_to_gif(input_path, output_path, fps)
     except Exception as e:
+        logger.error(f"Video to GIF failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -188,6 +195,7 @@ async def video_compress(
     try:
         await video_service.compress_video(input_path, output_path, quality)
     except Exception as e:
+        logger.error(f"Video compress failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -219,6 +227,7 @@ async def audio_convert(
     try:
         await audio_service.convert_audio(input_path, output_path, output_format, quality)
     except Exception as e:
+        logger.error(f"Audio convert failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -246,6 +255,7 @@ async def audio_trim(
     try:
         await audio_service.trim_audio(input_path, output_path, start, end, output_format)
     except Exception as e:
+        logger.error(f"Audio trim failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -276,6 +286,7 @@ async def audio_merge(
     try:
         await audio_service.merge_audio(input_paths, output_path, output_format)
     except Exception as e:
+        logger.error(f"Audio merge failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -300,6 +311,7 @@ async def audio_normalize(
     try:
         await audio_service.normalize_audio(input_path, output_path, output_format)
     except Exception as e:
+        logger.error(f"Audio normalize failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -330,6 +342,7 @@ async def image_convert(
     try:
         image_service.convert_image(input_path, output_path, output_format)
     except Exception as e:
+        logger.error(f"Image convert failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -359,6 +372,7 @@ async def image_compress(
     try:
         image_service.compress_image(input_path, output_path, quality, output_format)
     except Exception as e:
+        logger.error(f"Image compress failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -389,6 +403,7 @@ async def image_resize(
     try:
         image_service.resize_image(input_path, output_path, width, height, output_format)
     except Exception as e:
+        logger.error(f"Image resize failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -421,6 +436,7 @@ async def pdf_merge(
     try:
         await pdf_service.merge_pdfs(input_paths, output_path)
     except Exception as e:
+        logger.error(f"PDF merge failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -442,6 +458,7 @@ async def pdf_split(
     try:
         await pdf_service.split_pdf(input_path, output_path, ranges)
     except Exception as e:
+        logger.error(f"PDF split failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -467,6 +484,7 @@ async def pdf_compress(
     try:
         await pdf_service.compress_pdf(input_path, output_path, quality)
     except Exception as e:
+        logger.error(f"PDF compress failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -496,6 +514,7 @@ async def pdf_images_to_pdf(
     try:
         await pdf_service.images_to_pdf(input_paths, output_path)
     except Exception as e:
+        logger.error(f"Images to PDF failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 
@@ -523,6 +542,7 @@ async def pdf_to_images(
     try:
         await pdf_service.pdf_to_images(input_path, output_path, output_format, quality)
     except Exception as e:
+        logger.error(f"PDF to images failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
         raise HTTPException(500, detail=str(e))
 

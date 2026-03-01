@@ -3,18 +3,41 @@ Audio processing service
 Ported from cvert/src/main/converters/audio.ts
 
 Handles: convert, trim, merge, normalize
-All operations use FFmpeg via asyncio subprocess.
+All operations use FFmpeg via subprocess (thread pool).
 """
 import asyncio
+import logging
 import os
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import List, Optional
 
+logger = logging.getLogger(__name__)
+
 
 def _get_ffmpeg() -> str:
     return shutil.which("ffmpeg") or "ffmpeg"
+
+
+def _run_ffmpeg(args: list[str]) -> None:
+    """Run FFmpeg command synchronously, raising on failure."""
+    logger.info(f"FFmpeg command: {' '.join(args)}")
+    result = subprocess.run(
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        err = result.stderr.decode(errors="replace")[-500:]
+        logger.error(f"FFmpeg failed (code {result.returncode}): {err}")
+        raise RuntimeError(f"FFmpeg failed: {err}")
+
+
+async def _run_ffmpeg_async(args: list[str]) -> None:
+    """Run FFmpeg in a thread pool to avoid blocking the event loop."""
+    await asyncio.to_thread(_run_ffmpeg, args)
 
 
 # Codec map ported directly from cvert convertAudio
@@ -64,15 +87,7 @@ async def convert_audio(
 
     args.append(output_path)
 
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
-        raise RuntimeError(f"Audio conversion failed: {stderr.decode()[-500:]}")
+    await _run_ffmpeg_async(args)
 
 
 async def trim_audio(
@@ -104,15 +119,7 @@ async def trim_audio(
 
     args.append(output_path)
 
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
-        raise RuntimeError(f"Audio trimming failed: {stderr.decode()[-500:]}")
+    await _run_ffmpeg_async(args)
 
 
 async def merge_audio(
@@ -127,8 +134,8 @@ async def merge_audio(
     # Create a temporary file list for FFmpeg concat
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
         for path in input_paths:
-            # FFmpeg concat requires single-quoted paths with escaped quotes
-            safe_path = path.replace("'", "'\\''")
+            # FFmpeg concat on Windows needs forward slashes or escaped backslashes
+            safe_path = path.replace("\\", "/")
             f.write(f"file '{safe_path}'\n")
         filelist_path = f.name
 
@@ -145,15 +152,7 @@ async def merge_audio(
         args.extend(codec_args)
         args.append(output_path)
 
-        proc = await asyncio.create_subprocess_exec(
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await proc.communicate()
-
-        if proc.returncode != 0:
-            raise RuntimeError(f"Audio merge failed: {stderr.decode()[-500:]}")
+        await _run_ffmpeg_async(args)
     finally:
         os.unlink(filelist_path)
 
@@ -179,12 +178,4 @@ async def normalize_audio(
 
     args.append(output_path)
 
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
-        raise RuntimeError(f"Audio normalization failed: {stderr.decode()[-500:]}")
+    await _run_ffmpeg_async(args)

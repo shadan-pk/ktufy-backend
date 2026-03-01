@@ -3,15 +3,19 @@ Video processing service
 Ported from cvert/src/main/converters/video.ts
 
 Handles: convert, extract-audio, video-to-gif, compress
-All operations use FFmpeg via asyncio subprocess.
+All operations use FFmpeg via subprocess.
 """
 import asyncio
 import json
+import logging
 import os
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -36,6 +40,25 @@ def _get_ffprobe() -> str:
     return shutil.which("ffprobe") or "ffprobe"
 
 
+def _run_ffmpeg(args: list[str]) -> None:
+    """Run FFmpeg command synchronously, raising on failure."""
+    logger.info(f"FFmpeg command: {' '.join(args)}")
+    result = subprocess.run(
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        err = result.stderr.decode(errors="replace")[-500:]
+        logger.error(f"FFmpeg failed (code {result.returncode}): {err}")
+        raise RuntimeError(f"FFmpeg failed: {err}")
+
+
+async def _run_ffmpeg_async(args: list[str]) -> None:
+    """Run FFmpeg in a thread pool to avoid blocking the event loop."""
+    await asyncio.to_thread(_run_ffmpeg, args)
+
+
 async def get_media_info(file_path: str) -> MediaInfo:
     """Get media file information via ffprobe (mirrors cvert getMediaInfo)."""
     args = [
@@ -46,17 +69,17 @@ async def get_media_info(file_path: str) -> MediaInfo:
         "-show_streams",
         file_path,
     ]
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+    logger.info(f"ffprobe command: {' '.join(args)}")
+    result = await asyncio.to_thread(
+        subprocess.run, args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
 
-    if proc.returncode != 0:
-        raise RuntimeError(f"ffprobe failed: {stderr.decode()}")
+    if result.returncode != 0:
+        raise RuntimeError(f"ffprobe failed: {result.stderr.decode(errors='replace')}")
 
-    info = json.loads(stdout.decode())
+    info = json.loads(result.stdout.decode())
     video_stream = next((s for s in info.get("streams", []) if s.get("codec_type") == "video"), {})
     audio_stream = next((s for s in info.get("streams", []) if s.get("codec_type") == "audio"), {})
     fmt = info.get("format", {})
@@ -135,15 +158,7 @@ async def convert_video(
 
     args.append(output_path)
 
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
-        raise RuntimeError(f"Video conversion failed: {stderr.decode()[-500:]}")
+    await _run_ffmpeg_async(args)
 
 
 async def extract_audio(
@@ -174,15 +189,7 @@ async def extract_audio(
         output_path,
     ]
 
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
-        raise RuntimeError(f"Audio extraction failed: {stderr.decode()[-500:]}")
+    await _run_ffmpeg_async(args)
 
 
 async def video_to_gif(
@@ -209,15 +216,7 @@ async def video_to_gif(
         output_path,
     ]
 
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
-        raise RuntimeError(f"GIF conversion failed: {stderr.decode()[-500:]}")
+    await _run_ffmpeg_async(args)
 
 
 async def compress_video(
@@ -246,12 +245,4 @@ async def compress_video(
         output_path,
     ]
 
-    proc = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()
-
-    if proc.returncode != 0:
-        raise RuntimeError(f"Video compression failed: {stderr.decode()[-500:]}")
+    await _run_ffmpeg_async(args)
