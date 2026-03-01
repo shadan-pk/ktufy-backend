@@ -22,6 +22,7 @@ from routers import flashcards as flashcards_router
 from routers import syllabus as syllabus_router
 from routers import learning as learning_router
 from routers import coding as coding_router
+from routers import media as media_router
 
 # Import auth dependencies for the users route alias
 from app.auth import get_current_user, AuthenticatedUser
@@ -49,6 +50,7 @@ app.include_router(flashcards_router.router)
 app.include_router(syllabus_router.router)
 app.include_router(learning_router.router)
 app.include_router(coding_router.router)
+app.include_router(media_router.router)
 
 # Configure CORS
 app.add_middleware(

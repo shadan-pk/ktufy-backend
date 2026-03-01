@@ -38,6 +38,8 @@ sse-starlette>=1.8.2       # Server-sent events for streaming
 
 # PDF Processing
 pdfplumber>=0.10.0         # PDF text extraction
+PyMuPDF>=1.23.0            # PDF manipulation (merge, split, compress, pdf-to-images)
+Pillow>=10.0.0             # Image processing (convert, compress, resize, images-to-pdf)
 
 # Knowledge Graph (Neo4j)
 neo4j>=5.14.0              # Neo4j Python driver
