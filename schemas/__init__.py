@@ -7,3 +7,4 @@ from schemas.user import *
 from schemas.chat import *
 from schemas.admin import *
 from schemas.flashcard import *
+from schemas.syllabus import *

@@ -55,32 +55,23 @@ These endpoints are actively called by the frontend and have no fallback.
 - [x] Additional endpoints: `GET /` (list sets), `GET /{id}`, `DELETE /{id}`
 - [x] Register router in `main.py`
 
-### 2.2 `GET /api/v1/syllabus/branches`
-- [ ] Create a new router: `routers/syllabus.py`
-- [ ] Return all available branch codes and modules(1-5) from Neo4j KG
-- [ ] Response: `[{ "code": "CSE", "name": "Computer Science & Engineering" }, ...]`
+### 2.2 `GET /api/v1/syllabus/branches` — DONE
+- [x] Create a new router: `routers/syllabus.py`
+- [x] Return all available branch codes from Neo4j KG
+- [x] Response: `[{ "code": "CSE", "name": "Computer Science & Engineering", "subject_count": 4 }, ...]`
 
-### 2.3 `GET /api/v1/syllabus/subjects?branch={branch}&semester={semester}`
-- [ ] Add to syllabus router
-- [ ] Query params: `branch` (e.g. "CSE"), `semester` (e.g. "S6")
-- [ ] Return: `[{ "name": "...", "code": "CST302", "credits": 4 }, ...]`
-- [ ] Source data from Neo4j knowledge graph
+### 2.3 `GET /api/v1/syllabus/subjects?branch={branch}&semester={semester}` — DONE
+- [x] Add to syllabus router
+- [x] Query params: `branch` (e.g. "CSE"), `semester` (e.g. "S6" or "6")
+- [x] Return: `[{ "name": "...", "code": "CST302", "credits": 4, "semester": 6, "module_count": 5 }, ...]`
+- [x] Source data from Neo4j knowledge graph
 
-### 2.4 `GET /api/v1/syllabus/subject/{subjectCode}`
-- [ ] Add to syllabus router
-- [ ] Return full subject detail:
-  ```json
-  {
-    "subject_name": "...",
-    "subject_code": "...",
-    "credits": 4,
-    "modules": [{ "module_number": 1, "title": "...", "topics": ["..."], "hours": 9 }],
-    "course_outcomes": ["CO1: ..."],
-    "textbooks": ["..."],
-    "references": ["..."]
-  }
-  ```
-- [ ] Source from Neo4j KG + syllabus_embeddings chunks (course_outcomes, references)
+### 2.4 `GET /api/v1/syllabus/subject/{subjectCode}` — DONE
+- [x] Add to syllabus router
+- [x] Return full subject detail with modules, topics, textbooks, course outcomes
+- [x] Fuzzy code matching (e.g. "CST201" finds "CST 201")
+- [x] Source from Neo4j KG (both V1 Topic and V2 Concept nodes)
+- [x] Register router in `main.py`
 
 ### 2.5 `POST /api/v1/learning/quiz/generate`
 - [ ] Create a new router: `routers/learning.py`

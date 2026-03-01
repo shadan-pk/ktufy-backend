@@ -1,6 +1,6 @@
 # KTUfy Backend API - All Endpoints
 
-> Total: **62 endpoints** across 5 routers + main app
+> Total: **65 endpoints** across 6 routers + main app
 
 ---
 
@@ -55,6 +55,16 @@
 | GET | `/api/v1/flashcards/search?topic={topic}` | Search flashcard sets by topic (fuzzy match) | Required |
 | GET | `/api/v1/flashcards/{id}` | Get a specific flashcard set by ID | Required |
 | DELETE | `/api/v1/flashcards/{id}` | Delete a saved flashcard set | Required |
+
+---
+
+## Syllabus (`/api/v1/syllabus`)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/api/v1/syllabus/branches` | List all branches with subject counts | Required |
+| GET | `/api/v1/syllabus/subjects?branch=CSE&semester=S3` | List subjects (filterable by branch/semester) | Required |
+| GET | `/api/v1/syllabus/subject/{subjectCode}` | Full subject detail: modules, topics, textbooks, COs | Required |
 
 ---
 
