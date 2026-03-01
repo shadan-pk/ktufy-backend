@@ -450,51 +450,138 @@ async function pollJobProgress(jobId) {
     const progressPercent = document.getElementById('progress-percent');
     const progressDetail = document.getElementById('progress-detail');
 
-    // Start with indeterminate animation
-    progressBar.classList.add('indeterminate');
+    // ── Smooth animated progress ──────────────────────────────────────
+    // The bar animates smoothly on the frontend. When the API reports
+    // completion, the bar accelerates to 100% over ~1.5s before showing
+    // the success toast.
 
+    let displayPercent = 0;
+    let realProgress = 0;
+    let completing = false;   // API said done; animation is filling to 100%
+    let isFailed = false;
+    let lastMessage = 'Initializing...';
+    let animFrameId = null;
+    let lastTimestamp = null;
+
+    const stages = [
+        { at: 0,  msg: 'Uploading file...' },
+        { at: 10, msg: 'Extracting text from PDF...' },
+        { at: 25, msg: 'Analyzing with AI...' },
+        { at: 45, msg: 'Building knowledge graph...' },
+        { at: 60, msg: 'Storing to database...' },
+        { at: 75, msg: 'Generating embeddings...' },
+        { at: 88, msg: 'Finalizing...' },
+    ];
+
+    function getStageMessage(pct) {
+        let msg = stages[0].msg;
+        for (const s of stages) {
+            if (pct >= s.at) msg = s.msg;
+        }
+        return msg;
+    }
+
+    function animate(timestamp) {
+        if (isFailed) return;
+
+        if (!lastTimestamp) lastTimestamp = timestamp;
+        const dt = (timestamp - lastTimestamp) / 1000;
+        lastTimestamp = timestamp;
+
+        if (completing) {
+            // Fast fill to 100% — takes ~1.5s total regardless of where we are
+            const remaining = 100 - displayPercent;
+            const speed = Math.max(remaining * 1.2, 8); // exponential ease-out
+            displayPercent = Math.min(100, displayPercent + speed * dt);
+        } else {
+            // Normal animation: advances quickly at first, slows toward 92%
+            const ceiling = 92;
+            if (displayPercent < ceiling) {
+                let speed;
+                if (realProgress > displayPercent) {
+                    speed = 20; // catch up to real value fast
+                } else if (displayPercent < 30) {
+                    speed = 6;
+                } else if (displayPercent < 55) {
+                    speed = 3.5;
+                } else if (displayPercent < 75) {
+                    speed = 2;
+                } else if (displayPercent < 85) {
+                    speed = 0.8;
+                } else {
+                    speed = 0.3;
+                }
+                displayPercent = Math.min(ceiling, displayPercent + speed * dt);
+            }
+        }
+
+        // Update DOM
+        const rounded = Math.round(displayPercent);
+        progressBar.style.width = `${rounded}%`;
+        progressPercent.textContent = `${rounded}%`;
+        progressStatus.textContent = completing
+            ? 'Almost done...'
+            : (lastMessage !== 'Initializing...' ? lastMessage : getStageMessage(rounded));
+
+        // When completing animation reaches 100%, fire the success
+        if (completing && displayPercent >= 99.5) {
+            progressBar.style.width = '100%';
+            progressPercent.textContent = '100%';
+            progressStatus.textContent = 'Completed!';
+            if (progressDetail) progressDetail.textContent = '';
+            showToast('Processing completed successfully!', 'success');
+            setTimeout(() => {
+                document.getElementById('upload-progress').style.display = 'none';
+                progressBar.style.width = '0%';
+            }, 2000);
+            loadUploadedFiles();
+            refreshStats();
+            return; // stop animation
+        }
+
+        animFrameId = requestAnimationFrame(animate);
+    }
+
+    // Remove any leftover classes, start clean
+    progressBar.className = 'progress-bar-fill';
+    progressBar.style.width = '0%';
+    animFrameId = requestAnimationFrame(animate);
+
+    // Poll the API separately
     const poll = async () => {
+        if (completing || isFailed) return;
+
         try {
             const response = await fetch(`${API_BASE}/jobs/${jobId}`);
             const data = await response.json();
 
-            // Switch from indeterminate to determinate once we get real progress
-            if (data.progress > 0) {
-                progressBar.classList.remove('indeterminate');
-                progressBar.style.width = `${data.progress}%`;
-            }
-
-            progressPercent.textContent = `${data.progress}%`;
-            progressStatus.textContent = data.message || (data.status === 'processing' ? 'Processing...' : (data.status || ''));
-            if (progressDetail) progressDetail.textContent = '';
+            realProgress = data.progress || 0;
+            if (data.message) lastMessage = data.message;
 
             if (data.status === 'completed') {
-                progressBar.classList.remove('indeterminate');
-                progressBar.style.width = '100%';
-                progressPercent.textContent = '100%';
-                showToast('Processing completed successfully!', 'success');
-                setTimeout(() => {
-                    document.getElementById('upload-progress').style.display = 'none';
-                    progressBar.style.width = '0%';
-                }, 2000);
-                loadUploadedFiles();
-                refreshStats();
-            } else if (data.status === 'failed') {
-                progressBar.classList.remove('indeterminate');
+                // Don't snap — let the animation fill to 100% smoothly
+                completing = true;
+                return;
+            }
+
+            if (data.status === 'failed') {
+                isFailed = true;
+                cancelAnimationFrame(animFrameId);
                 showToast('Processing failed: ' + data.message, 'danger');
                 document.getElementById('upload-progress').style.display = 'none';
-            } else {
-                // Poll faster (800ms) to catch intermediate states
-                setTimeout(poll, 800);
+                return;
             }
+
+            setTimeout(poll, 500);
         } catch (error) {
             console.error('Polling error:', error);
-            setTimeout(poll, 2000);
+            setTimeout(poll, 1500);
         }
     };
 
     poll();
 }
+
 
 async function loadUploadedFiles() {
     try {
