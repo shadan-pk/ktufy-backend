@@ -9,7 +9,8 @@ from pydantic import EmailStr
 from app.auth import get_current_user, get_optional_user, AuthenticatedUser, verify_supabase_token
 from schemas.user import (
     UserResponse, 
-    UserProfile, 
+    UserProfile,
+    UserProfileResponse,
     TokenVerifyRequest, 
     TokenVerifyResponse,
     AuthStatusResponse,
@@ -24,7 +25,7 @@ router = APIRouter(
 )
 
 
-@router.get("/me", response_model=UserProfile)
+@router.get("/me", response_model=UserProfileResponse)
 async def get_current_user_profile(
     current_user: AuthenticatedUser = Depends(get_current_user)
 ):
@@ -34,9 +35,10 @@ async def get_current_user_profile(
     **Requires authentication**: Bearer token in Authorization header
     
     Fetches user data from both auth.users and public.users tables.
+    Returns a flat JSON object with all profile fields at the top level.
     
     Returns:
-        UserProfile: The authenticated user's profile information
+        UserProfileResponse: The authenticated user's profile information
     """
     try:
         # Fetch user data from public.users table
@@ -44,32 +46,38 @@ async def get_current_user_profile(
         
         if response.data and len(response.data) > 0:
             user_data = response.data[0]
-            # Merge with auth user data
-            return UserProfile(
+            return UserProfileResponse(
                 user_id=current_user.user_id,
-                email=current_user.email,
+                email=user_data.get("email", current_user.email),
+                name=user_data.get("name"),
+                registration_number=user_data.get("registration_number"),
+                college=user_data.get("college"),
+                branch=user_data.get("branch"),
+                semester=user_data.get("semester"),
+                year_joined=user_data.get("year_joined"),
+                year_ending=user_data.get("year_ending"),
+                roll_number=user_data.get("roll_number"),
+                metadata=user_data.get("metadata", {}),
                 role=current_user.role,
-                metadata=user_data  # Include all fields from public.users
+                created_at=user_data.get("created_at")
             )
         
         # Fallback if no record in public.users
-        return UserProfile(
+        return UserProfileResponse(
             user_id=current_user.user_id,
             email=current_user.email,
-            role=current_user.role,
-            metadata=current_user.metadata
+            role=current_user.role
         )
     except Exception as e:
         # Fallback to auth data only
-        return UserProfile(
+        return UserProfileResponse(
             user_id=current_user.user_id,
             email=current_user.email,
-            role=current_user.role,
-            metadata=current_user.metadata
+            role=current_user.role
         )
 
 
-@router.put("/me", response_model=UserProfile)
+@router.put("/me", response_model=UserProfileResponse)
 async def update_user_profile(
     update_data: UserUpdateRequest,
     current_user: AuthenticatedUser = Depends(get_current_user)
@@ -85,7 +93,7 @@ async def update_user_profile(
         update_data: User update data (email and/or profile fields)
         
     Returns:
-        UserProfile: The updated user profile
+        UserProfileResponse: The updated user profile (flat format)
     """
     try:
         # Prepare data for public.users table
@@ -99,6 +107,8 @@ async def update_user_profile(
             users_table_data["college"] = update_data.college
         if update_data.branch is not None:
             users_table_data["branch"] = update_data.branch
+        if update_data.semester is not None:
+            users_table_data["semester"] = update_data.semester
         if update_data.year_joined is not None:
             users_table_data["year_joined"] = update_data.year_joined
         if update_data.year_ending is not None:
@@ -146,12 +156,22 @@ async def update_user_profile(
         # Get updated user data from auth
         auth_response = supabase_admin_client.auth.admin.get_user_by_id(current_user.user_id)
         
-        # Return updated profile
-        return UserProfile(
+        # Return updated profile in flat format
+        row = response.data[0] if response.data else {}
+        return UserProfileResponse(
             user_id=current_user.user_id,
             email=auth_response.user.email if auth_response and auth_response.user else current_user.email,
+            name=row.get("name"),
+            registration_number=row.get("registration_number"),
+            college=row.get("college"),
+            branch=row.get("branch"),
+            semester=row.get("semester"),
+            year_joined=row.get("year_joined"),
+            year_ending=row.get("year_ending"),
+            roll_number=row.get("roll_number"),
+            metadata=row.get("metadata", {}),
             role=current_user.role,
-            metadata=response.data[0] if response.data else {}
+            created_at=row.get("created_at")
         )
         
     except HTTPException:

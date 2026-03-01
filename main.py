@@ -2,7 +2,7 @@
 KTUfy Backend API
 Main application entry point
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
@@ -14,6 +14,11 @@ from routers import auth as auth_router
 from routers import chat as chat_router
 from routers import admin as admin_router
 from routers import admin_v2 as admin_v2_router  # V2 KG-RAG corrected router
+
+# Import auth dependencies for the users route alias
+from app.auth import get_current_user, AuthenticatedUser
+from schemas.user import MessageResponse
+from utils.supabase_client import supabase_admin_client
 
 # Load environment variables
 load_dotenv()
@@ -53,6 +58,33 @@ async def admin_dashboard():
     Serve the Admin Dashboard HTML page
     """
     return FileResponse("templates/admin.html")
+
+
+# DELETE /api/v1/users/{user_id} — route alias expected by frontend
+# (Backend also has this at DELETE /api/v1/auth/users/{user_id})
+@app.delete("/api/v1/users/{user_id}", response_model=MessageResponse, tags=["Authentication"])
+async def delete_user_account_alias(
+    user_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Delete a user account permanently.
+
+    Users can only delete their own account unless they have admin privileges.
+    """
+    if current_user.user_id != user_id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own account"
+        )
+    try:
+        supabase_admin_client.auth.admin.delete_user(user_id)
+        return MessageResponse(message="Account deleted successfully.", success=True)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting user account: {str(e)}"
+        )
 
 
 

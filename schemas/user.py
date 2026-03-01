@@ -36,22 +36,49 @@ class UserResponse(UserBase):
 
 class UserProfile(UserResponse):
     """
-    Extended user profile with metadata
+    Extended user profile with metadata (legacy — kept for internal use)
     """
     metadata: dict = Field(default_factory=dict, description="User metadata from Supabase")
     
+    class Config:
+        from_attributes = True
+
+
+class UserProfileResponse(BaseModel):
+    """
+    Flat user profile response matching frontend expectations.
+    All public.users columns are top-level fields.
+    """
+    user_id: str = Field(..., description="Unique user identifier")
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    registration_number: Optional[str] = None
+    college: Optional[str] = None
+    branch: Optional[str] = None
+    semester: Optional[str] = Field(None, description="Semester string e.g. S1-S8")
+    year_joined: Optional[int] = None
+    year_ending: Optional[int] = None
+    roll_number: Optional[str] = None
+    metadata: Optional[dict] = Field(default_factory=dict)
+    role: str = Field(default="student", description="User role")
+    created_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
         json_schema_extra = {
             "example": {
                 "user_id": "123e4567-e89b-12d3-a456-426614174000",
                 "email": "student@ktu.edu.in",
-                "role": "authenticated",
-                "metadata": {
-                    "full_name": "John Doe",
-                    "semester": 4,
-                    "branch": "CSE"
-                },
+                "name": "John Doe",
+                "registration_number": "KTU20CS001",
+                "college": "College of Engineering",
+                "branch": "CSE",
+                "semester": "S6",
+                "year_joined": 2020,
+                "year_ending": 2024,
+                "roll_number": "20CS001",
+                "metadata": {},
+                "role": "student",
                 "created_at": "2025-10-20T10:30:00Z"
             }
         }
@@ -126,6 +153,7 @@ class UserUpdateRequest(BaseModel):
     registration_number: Optional[str] = Field(None, description="University registration number")
     college: Optional[str] = Field(None, description="College name")
     branch: Optional[str] = Field(None, description="Branch/Department")
+    semester: Optional[str] = Field(None, description="Semester string e.g. S1-S8")
     year_joined: Optional[int] = Field(None, description="Year of joining", ge=2000, le=2100)
     year_ending: Optional[int] = Field(None, description="Year of completion", ge=2000, le=2100)
     roll_number: Optional[str] = Field(None, description="Roll number")
@@ -142,9 +170,9 @@ class UserUpdateRequest(BaseModel):
                 "year_joined": 2021,
                 "year_ending": 2025,
                 "roll_number": "CSE21001",
+                "semester": "S5",
                 "metadata": {
-                    "phone": "+91-1234567890",
-                    "semester": 5
+                    "phone": "+91-1234567890"
                 }
             }
         }
