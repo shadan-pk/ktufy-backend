@@ -134,7 +134,7 @@ class EmbeddingServiceV2:
                     "regulation": regulation
                 }
                 
-                result = supabase_client.table("syllabus_embeddings").insert(data).execute()
+                result = supabase_client.table("syllabus_embeddings").upsert(data, on_conflict="chunk_id").execute()
                 
                 if result.data:
                     stats["chunks_stored"] += 1
@@ -303,6 +303,7 @@ class EmbeddingServiceV2:
             
             return {
                 "total_chunks": total,
+                "total_embeddings": total,
                 "chunks_by_type": by_type,
                 "subjects_covered": len(subjects),
                 "topics_covered": len(topics),

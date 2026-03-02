@@ -393,7 +393,7 @@ class SyllabusProcessorV2:
                         content += f"\nTopic: {topic_name}"
                 
                 embedding = embedding_service.generate_embedding(content)
-                supabase_client.table("syllabus_embeddings").insert({
+                supabase_client.table("syllabus_embeddings").upsert({
                     "content": content,
                     "embedding": embedding,
                     "subject_code": subject_data.get("code", ""),

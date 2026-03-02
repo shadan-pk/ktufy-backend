@@ -716,6 +716,7 @@ class Neo4jServiceV2:
                 "total_subjects": record["subjects"],
                 "total_modules": record["modules"],
                 "total_concepts": record["concepts"],
+                "total_topics": record["concepts"],
                 "total_relationships": record["relationships"],
                 "branches": [b for b in record["branches"] if b],
                 "semesters": sorted([s for s in record["semesters"] if s]),
