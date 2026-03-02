@@ -677,6 +677,108 @@ class Neo4jServiceV2:
             return path
     
     # ═══════════════════════════════════════════════════════════════════════
+    # Full Graph Data (for visualization)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def get_full_graph(
+        self,
+        semester: Optional[int] = None,
+        branch: Optional[str] = None,
+        regulation: Optional[str] = None,
+    ) -> dict:
+        """Return all nodes and edges for visualization"""
+        if not self.driver:
+            raise ConnectionError("Neo4j not connected")
+
+        conditions = []
+        params: dict = {}
+        if semester:
+            conditions.append("s.semester = $semester")
+            params["semester"] = semester
+        if branch:
+            conditions.append("s.branch = $branch")
+            params["branch"] = branch
+        if regulation:
+            conditions.append("s.regulation = $regulation")
+            params["regulation"] = regulation
+
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+        query = f"""
+        MATCH (s:Subject) {where_clause}
+        OPTIONAL MATCH (s)-[:HAS_MODULE]->(m:Module)
+        OPTIONAL MATCH (m)-[:CONTAINS]->(c:Concept)
+        WITH collect(DISTINCT s) AS subjects,
+             collect(DISTINCT m) AS modules,
+             collect(DISTINCT c) AS concepts
+        RETURN subjects, modules, concepts
+        """
+
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, **params)
+                record = result.single()
+                if not record:
+                    return {"nodes": [], "edges": []}
+
+                nodes = []
+                edges = []
+                seen_ids = set()
+
+                for s in record["subjects"]:
+                    sd = dict(s)
+                    nid = sd.get("code", sd.get("id", ""))
+                    if nid and nid not in seen_ids:
+                        seen_ids.add(nid)
+                        nodes.append({
+                            "id": nid,
+                            "label": sd.get("name", nid),
+                            "type": "subject",
+                            "semester": sd.get("semester"),
+                            "branch": sd.get("branch"),
+                            "regulation": sd.get("regulation"),
+                        })
+
+                for m in record["modules"]:
+                    md = dict(m)
+                    nid = md.get("id", "")
+                    if nid and nid not in seen_ids:
+                        seen_ids.add(nid)
+                        nodes.append({
+                            "id": nid,
+                            "label": md.get("name", nid),
+                            "type": "module",
+                            "number": md.get("number"),
+                            "subject_code": md.get("subject_code"),
+                        })
+                        # edge: subject -> module
+                        sc = md.get("subject_code", "")
+                        if sc:
+                            edges.append({"from": sc, "to": nid, "type": "HAS_MODULE"})
+
+                for c in record["concepts"]:
+                    cd = dict(c)
+                    nid = cd.get("id", "")
+                    if nid and nid not in seen_ids:
+                        seen_ids.add(nid)
+                        nodes.append({
+                            "id": nid,
+                            "label": cd.get("name", cd.get("display_name", nid)),
+                            "type": "concept",
+                            "module_id": cd.get("module_id"),
+                        })
+                        # edge: module -> concept
+                        mid = cd.get("module_id", "")
+                        if mid:
+                            edges.append({"from": mid, "to": nid, "type": "CONTAINS"})
+
+                return {"nodes": nodes, "edges": edges}
+
+        except Exception as e:
+            logger.error(f"get_full_graph error: {e}")
+            return {"nodes": [], "edges": []}
+
+    # ═══════════════════════════════════════════════════════════════════════
     # Statistics
     # ═══════════════════════════════════════════════════════════════════════
     

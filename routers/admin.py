@@ -204,6 +204,26 @@ async def get_job_status(job_id: str):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Graph Visualization
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/graph/data", summary="Get full knowledge graph for visualization")
+async def get_graph_data(
+    semester: Optional[int] = Query(None, ge=1, le=8),
+    branch: Optional[str] = Query(None),
+    regulation: Optional[str] = Query(None),
+):
+    """Return all nodes and edges for the interactive graph visualization"""
+    if not neo4j_service.is_connected():
+        raise HTTPException(status_code=503, detail="Neo4j not connected")
+
+    graph = neo4j_service.get_full_graph(
+        semester=semester, branch=branch, regulation=regulation
+    )
+    return graph
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Subject Management
 # ═══════════════════════════════════════════════════════════════════════════════
 

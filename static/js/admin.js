@@ -195,6 +195,9 @@ function showSection(sectionName) {
         case 'subjects':
             loadSubjects();
             break;
+        case 'graph':
+            loadGraphData();
+            break;
         case 'jobs':
             loadJobs();
             break;
@@ -218,6 +221,13 @@ async function loadDashboard() {
     await loadSystemStatus();
     await refreshStats();
     await loadActiveUsers();
+
+    // Load graph data for mini preview
+    if (typeof loadGraphData === 'function' && GRAPH.nodes.length === 0) {
+        loadGraphData();
+    } else if (typeof renderMiniGraph === 'function') {
+        renderMiniGraph();
+    }
 
     if (activeUsersIntervalId) {
         clearInterval(activeUsersIntervalId);
