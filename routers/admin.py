@@ -229,19 +229,22 @@ async def list_subjects(
 
 
 @router.get("/subjects/{subject_code}", summary="Get subject details")
-async def get_subject(subject_code: str):
+async def get_subject(subject_code: str, regulation: str = "2019"):
     """
     Get detailed information about a subject including modules and topics
     """
     if not neo4j_service.is_connected():
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     
-    subject = neo4j_service.get_subject(subject_code)
+    subject = neo4j_service.get_subject(subject_code, regulation)
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
     
-    # Get modules with topics
-    modules = neo4j_service.get_modules(subject_code)
+    # Get modules with topics (Neo4j stores them as 'concepts', frontend expects 'topics')
+    modules = neo4j_service.get_modules(subject_code, regulation)
+    for m in modules:
+        if "concepts" in m and "topics" not in m:
+            m["topics"] = m.pop("concepts")
     subject["modules"] = modules
     
     return subject
@@ -296,14 +299,17 @@ async def delete_subject(subject_code: str):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/subjects/{subject_code}/modules", summary="Get modules for a subject")
-async def get_subject_modules(subject_code: str):
+async def get_subject_modules(subject_code: str, regulation: str = "2019"):
     """
     Get all modules for a specific subject
     """
     if not neo4j_service.is_connected():
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     
-    modules = neo4j_service.get_modules(subject_code)
+    modules = neo4j_service.get_modules(subject_code, regulation)
+    for m in modules:
+        if "concepts" in m and "topics" not in m:
+            m["topics"] = m.pop("concepts")
     return {
         "subject_code": subject_code,
         "modules": modules,
