@@ -47,6 +47,38 @@ AI-powered study assistant backend for KTU students built with FastAPI.
    - Interactive docs: http://localhost:8000/docs
    - Alternative docs: http://localhost:8000/redoc
 
+## 🐳 Docker (Production-Style)
+
+This repo includes a full Docker Compose stack with the backend, Nginx reverse proxy, Neo4j, and Redis.
+
+### Prerequisites
+- Docker Desktop (Windows/Mac) or Docker Engine (Linux)
+
+### First-time Setup
+1. **Create your environment file:**
+   - Copy `.env.example` to `.env`
+   - Fill in Supabase, Neo4j, and LLM credentials
+
+2. **Build and start the stack:**
+   ```powershell
+   docker compose up -d --build
+   ```
+
+3. **Verify services:**
+   - Backend health: http://localhost:8000/health
+   - API docs (via Nginx): http://localhost/docs
+   - Neo4j browser: http://localhost:7474
+
+### Stop and Clean Up
+```powershell
+docker compose down
+```
+
+### Logs
+```powershell
+docker compose logs -f backend
+```
+
 ## 📁 Project Structure
 
 ```
