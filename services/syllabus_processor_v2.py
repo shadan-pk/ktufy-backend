@@ -12,6 +12,7 @@ from services.pdf_processor import pdf_processor
 from services.llm_extractor_v2 import llm_extractor
 from services.neo4j_service_v2 import neo4j_service
 from services.embedding_service_v2 import embedding_service
+from services.syllabus_db_service import syllabus_db_service
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +176,35 @@ class SyllabusProcessorV2:
             
             if job:
                 job.total_subjects = subjects_count
+                job.progress = 35
+                job.message = f"Found {subjects_count} subjects, {concepts_count} concepts. Storing to database..."
+            
+            # ═══════════════════════════════════════════════════════════════
+            # Step 2.5: Store structured syllabus to Supabase (for display)
+            # ═══════════════════════════════════════════════════════════════
+            logger.info("Step 2.5: Storing structured syllabus data to Supabase")
+            
+            if supabase_client:
+                try:
+                    from utils.supabase_client import supabase_admin_client
+                    db_stats = syllabus_db_service.store_syllabus(
+                        admin_client=supabase_admin_client,
+                        structured_data=structured_data,
+                        semester=semester,
+                        branch=branch,
+                        regulation=regulation,
+                    )
+                    result["database_store"] = {**db_stats, "status": "success"}
+                    logger.info(f"Stored to DB: {db_stats['subjects_stored']} subjects, {db_stats['modules_stored']} modules, {db_stats['topics_stored']} topics")
+                except Exception as db_err:
+                    logger.warning(f"Failed to store syllabus to DB (non-fatal): {db_err}")
+                    result["database_store"] = {"status": "failed", "error": str(db_err)}
+            else:
+                result["database_store"] = {"status": "skipped", "reason": "Supabase client not provided"}
+            
+            if job:
                 job.progress = 40
-                job.message = f"Found {subjects_count} subjects, {concepts_count} concepts. Building knowledge graph..."
+                job.message = f"Stored to DB. Building knowledge graph..."
             
             # ═══════════════════════════════════════════════════════════════
             # Step 3: Load into Neo4j Knowledge Graph (V2)
@@ -289,10 +317,11 @@ class SyllabusProcessorV2:
         regulation: str = "2019",
         supabase_client=None
     ) -> dict:
-        """Delete a subject from both KG and embeddings"""
+        """Delete a subject from KG, embeddings, and syllabus DB"""
         result = {
             "knowledge_graph": False,
-            "embeddings_deleted": 0
+            "embeddings_deleted": 0,
+            "database_deleted": False,
         }
         
         # Delete from Neo4j
@@ -304,6 +333,80 @@ class SyllabusProcessorV2:
             result["embeddings_deleted"] = embedding_service.delete_by_subject(
                 supabase_client, subject_code
             )
+        
+        # Delete from syllabus DB tables
+        try:
+            from utils.supabase_client import supabase_admin_client
+            result["database_deleted"] = syllabus_db_service.delete_subject(
+                supabase_admin_client, subject_code, regulation
+            )
+        except Exception as e:
+            logger.warning(f"Failed to delete subject from DB: {e}")
+        
+        return result
+    
+    def add_subject_manual(
+        self,
+        subject_data: dict,
+        supabase_client=None
+    ) -> dict:
+        """
+        Manually add a subject to the knowledge graph and embeddings
+        
+        Args:
+            subject_data: Subject information with modules and topics
+            supabase_client: Supabase client for embeddings
+            
+        Returns:
+            Result statistics
+        """
+        result = {
+            "knowledge_graph": None,
+            "embeddings": None,
+            "errors": []
+        }
+        
+        try:
+            semester = subject_data.get("semester", 0)
+            branch = subject_data.get("branch", "")
+            regulation = subject_data.get("regulation", "2019")
+            
+            # Add to Neo4j
+            if neo4j_service.is_connected():
+                neo4j_service.create_subject(subject_data, semester, branch, regulation)
+                
+                for module in subject_data.get("modules", []):
+                    neo4j_service.create_module(module, subject_data["code"], regulation)
+                    module_id = module.get("id", f"{subject_data['code'].lower()}_m{module['number']}")
+                    
+                    for topic in module.get("topics", []):
+                        neo4j_service.create_concept(topic, module_id)
+                
+                result["knowledge_graph"] = {"status": "success"}
+            
+            # Add embeddings
+            if supabase_client and embedding_service.is_ready():
+                content = f"Subject: {subject_data.get('name', '')}\nCode: {subject_data.get('code', '')}"
+                for module in subject_data.get("modules", []):
+                    for topic in module.get("topics", []):
+                        topic_name = topic.get("name", "") if isinstance(topic, dict) else str(topic)
+                        content += f"\nTopic: {topic_name}"
+                
+                embedding = embedding_service.generate_embedding(content)
+                supabase_client.table("syllabus_embeddings").upsert({
+                    "content": content,
+                    "embedding": embedding,
+                    "subject_code": subject_data.get("code", ""),
+                    "subject_name": subject_data.get("name", ""),
+                    "chunk_type": "syllabus_content",
+                    "semester": semester,
+                    "branch": branch,
+                    "regulation": regulation,
+                }).execute()
+                result["embeddings"] = {"status": "success", "chunks_stored": 1}
+            
+        except Exception as e:
+            result["errors"].append(str(e))
         
         return result
 

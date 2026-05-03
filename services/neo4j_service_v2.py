@@ -11,6 +11,24 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+def _coerce_int(value) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        if stripped.isdigit():
+            return int(stripped)
+    return None
+
+
 def to_canonical_id(text: str, prefix: str = "") -> str:
     """Convert text to canonical snake_case ID"""
     clean = re.sub(r'[^a-zA-Z0-9\s]', '', text)
@@ -61,7 +79,13 @@ class Neo4jServiceV2:
         except ImportError:
             logger.warning("neo4j driver not installed")
         except Exception as e:
-            logger.error(f"Could not connect to Neo4j: {e}")
+            err_str = str(e)
+            if "Unauthorized" in err_str or "authentication failure" in err_str:
+                print(f"\u26a0\ufe0f  Neo4j V2 auth failed — check NEO4J_PASSWORD in .env (current URI: {uri})")
+                logger.warning(f"Neo4j V2 authentication failed. Verify credentials in .env file.")
+            else:
+                print(f"\u26a0\ufe0f  Neo4j V2 unavailable: {err_str[:120]}")
+                logger.error(f"Could not connect to Neo4j V2: {e}")
             self.driver = None
     
     def is_connected(self) -> bool:
@@ -190,6 +214,11 @@ class Neo4jServiceV2:
         """Create a subject node"""
         if not self.driver:
             raise ConnectionError("Neo4j not connected")
+
+        code = str(subject_data.get("code", "")).strip()
+        name = str(subject_data.get("name", "")).strip()
+        if not code or not name:
+            raise ValueError("Subject code/name required")
         
         query = """
         MERGE (s:Subject {code: $code, regulation: $regulation})
@@ -207,21 +236,21 @@ class Neo4jServiceV2:
         RETURN s
         """
         
-        subject_id = to_canonical_id(subject_data["name"], subject_data["code"].lower())
+        subject_id = to_canonical_id(name, code.lower())
         
         with self.driver.session() as session:
             result = session.run(
                 query,
-                code=subject_data["code"],
+                code=code,
                 regulation=regulation,
                 id=subject_id,
-                name=subject_data["name"],
-                display_name=subject_data["name"],
-                credits=subject_data.get("credits", 0),
+                name=name,
+                display_name=name,
+                credits=_coerce_int(subject_data.get("credits")),
                 category=subject_data.get("category", ""),
                 semester=semester,
                 branch=branch,
-                hours_per_week=subject_data.get("hours_per_week", 0),
+                hours_per_week=_coerce_int(subject_data.get("hours_per_week")),
                 textbooks=subject_data.get("textbooks", []),
                 course_outcomes=subject_data.get("course_outcomes", [])
             )
@@ -236,7 +265,7 @@ class Neo4jServiceV2:
         query = """
         MATCH (s:Subject {code: $code, regulation: $regulation})
         OPTIONAL MATCH (s)-[:HAS_MODULE]->(m:Module)
-        OPTIONAL MATCH (m)-[:CONTAINS]->(c:Concept)
+        OPTIONAL MATCH (m)-[:CONTAINS]->(c)
         WITH s, m, collect(DISTINCT c) as concepts
         ORDER BY m.number
         WITH s, collect({module: m, concepts: concepts}) as modules_data
@@ -290,7 +319,7 @@ class Neo4jServiceV2:
         MATCH (s:Subject)
         {where_clause}
         OPTIONAL MATCH (s)-[:HAS_MODULE]->(m:Module)
-        OPTIONAL MATCH (m)-[:CONTAINS]->(c:Concept)
+        OPTIONAL MATCH (m)-[:CONTAINS]->(c)
         RETURN s, count(DISTINCT m) as module_count, count(DISTINCT c) as concept_count
         ORDER BY s.semester, s.code
         """
@@ -352,7 +381,7 @@ class Neo4jServiceV2:
         
         query = """
         MATCH (s:Subject {code: $code, regulation: $regulation})-[:HAS_MODULE]->(m:Module)
-        OPTIONAL MATCH (m)-[:CONTAINS]->(c:Concept)
+        OPTIONAL MATCH (m)-[:CONTAINS]->(c)
         RETURN m, collect(c) as concepts
         ORDER BY m.number
         """
@@ -671,6 +700,108 @@ class Neo4jServiceV2:
             return path
     
     # ═══════════════════════════════════════════════════════════════════════
+    # Full Graph Data (for visualization)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def get_full_graph(
+        self,
+        semester: Optional[int] = None,
+        branch: Optional[str] = None,
+        regulation: Optional[str] = None,
+    ) -> dict:
+        """Return all nodes and edges for visualization"""
+        if not self.driver:
+            raise ConnectionError("Neo4j not connected")
+
+        conditions = []
+        params: dict = {}
+        if semester:
+            conditions.append("s.semester = $semester")
+            params["semester"] = semester
+        if branch:
+            conditions.append("s.branch = $branch")
+            params["branch"] = branch
+        if regulation:
+            conditions.append("s.regulation = $regulation")
+            params["regulation"] = regulation
+
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+        query = f"""
+        MATCH (s:Subject) {where_clause}
+        OPTIONAL MATCH (s)-[:HAS_MODULE]->(m:Module)
+        OPTIONAL MATCH (m)-[:CONTAINS]->(c:Concept)
+        WITH collect(DISTINCT s) AS subjects,
+             collect(DISTINCT m) AS modules,
+             collect(DISTINCT c) AS concepts
+        RETURN subjects, modules, concepts
+        """
+
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, **params)
+                record = result.single()
+                if not record:
+                    return {"nodes": [], "edges": []}
+
+                nodes = []
+                edges = []
+                seen_ids = set()
+
+                for s in record["subjects"]:
+                    sd = dict(s)
+                    nid = sd.get("code", sd.get("id", ""))
+                    if nid and nid not in seen_ids:
+                        seen_ids.add(nid)
+                        nodes.append({
+                            "id": nid,
+                            "label": sd.get("name", nid),
+                            "type": "subject",
+                            "semester": sd.get("semester"),
+                            "branch": sd.get("branch"),
+                            "regulation": sd.get("regulation"),
+                        })
+
+                for m in record["modules"]:
+                    md = dict(m)
+                    nid = md.get("id", "")
+                    if nid and nid not in seen_ids:
+                        seen_ids.add(nid)
+                        nodes.append({
+                            "id": nid,
+                            "label": md.get("name", nid),
+                            "type": "module",
+                            "number": md.get("number"),
+                            "subject_code": md.get("subject_code"),
+                        })
+                        # edge: subject -> module
+                        sc = md.get("subject_code", "")
+                        if sc:
+                            edges.append({"from": sc, "to": nid, "type": "HAS_MODULE"})
+
+                for c in record["concepts"]:
+                    cd = dict(c)
+                    nid = cd.get("id", "")
+                    if nid and nid not in seen_ids:
+                        seen_ids.add(nid)
+                        nodes.append({
+                            "id": nid,
+                            "label": cd.get("name", cd.get("display_name", nid)),
+                            "type": "concept",
+                            "module_id": cd.get("module_id"),
+                        })
+                        # edge: module -> concept
+                        mid = cd.get("module_id", "")
+                        if mid:
+                            edges.append({"from": mid, "to": nid, "type": "CONTAINS"})
+
+                return {"nodes": nodes, "edges": edges}
+
+        except Exception as e:
+            logger.error(f"get_full_graph error: {e}")
+            return {"nodes": [], "edges": []}
+
+    # ═══════════════════════════════════════════════════════════════════════
     # Statistics
     # ═══════════════════════════════════════════════════════════════════════
     
@@ -681,8 +812,8 @@ class Neo4jServiceV2:
         
         query = """
         MATCH (s:Subject) WITH count(s) as subjects
-        MATCH (m:Module) WITH subjects, count(m) as modules
-        MATCH (c:Concept) WITH subjects, modules, count(c) as concepts
+        OPTIONAL MATCH (m:Module) WITH subjects, count(m) as modules
+        OPTIONAL MATCH (c:Concept) WITH subjects, modules, count(c) as concepts
         MATCH ()-[r]->() WITH subjects, modules, concepts, count(r) as relationships
         MATCH (sub:Subject) WITH subjects, modules, concepts, relationships, 
               collect(DISTINCT sub.branch) as branches,
@@ -710,6 +841,7 @@ class Neo4jServiceV2:
                 "total_subjects": record["subjects"],
                 "total_modules": record["modules"],
                 "total_concepts": record["concepts"],
+                "total_topics": record["concepts"],
                 "total_relationships": record["relationships"],
                 "branches": [b for b in record["branches"] if b],
                 "semesters": sorted([s for s in record["semesters"] if s]),
@@ -728,7 +860,7 @@ class Neo4jServiceV2:
         query = """
         MATCH (s:Subject {code: $code, regulation: $regulation})
         OPTIONAL MATCH (s)-[:HAS_MODULE]->(m:Module)
-        OPTIONAL MATCH (m)-[:CONTAINS]->(c:Concept)
+        OPTIONAL MATCH (m)-[:CONTAINS]->(c)
         DETACH DELETE s, m, c
         RETURN count(s) as deleted
         """
@@ -753,6 +885,102 @@ class Neo4jServiceV2:
             result = session.run(query)
             record = result.single()
             return {"deleted_nodes": record["deleted"] if record else 0}
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # V1 Compatibility Shims
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def setup_constraints(self):
+        """V1 compat → calls setup_schema()"""
+        return self.setup_schema()
+
+    def clear_all_data(self) -> bool:
+        """V1 compat → calls clear_all(), returns bool"""
+        result = self.clear_all()
+        return result.get("deleted_nodes", 0) > 0
+
+    def create_topic(self, topic_data: dict, module_id: str) -> dict:
+        """V1 compat → calls create_concept()"""
+        return self.create_concept(topic_data, module_id)
+
+    def search_topics(self, query: str, limit: int = 10) -> List[dict]:
+        """V1 compat → calls search_concepts()"""
+        return self.search_concepts(query, limit)
+
+    def create_prerequisite(self, from_code: str, to_code: str, reason: str = "") -> bool:
+        """V1 compat → calls create_subject_prerequisite()"""
+        return self.create_subject_prerequisite(from_code, to_code, reason=reason)
+
+    def create_relationship(self, from_id: str, to_id: str, rel_type: str, properties: dict = None) -> bool:
+        """V1 compat → calls create_semantic_relationship()"""
+        return self.create_semantic_relationship(from_id, to_id, rel_type, properties)
+
+    def get_concept_relationships(self, concept_id: str) -> List[dict]:
+        """V1 compat → returns relationships for a concept in v1 format"""
+        related = self.get_related_concepts(concept_id)
+        results = []
+        for item in related:
+            concept = item.get("concept", {})
+            for rel_type in item.get("relationship_types", ["RELATED_TO"]):
+                results.append({
+                    "type": rel_type,
+                    "target_id": concept.get("id", ""),
+                    "target_name": concept.get("name", concept.get("display_name", "")),
+                    "concept": concept,
+                })
+        return results
+
+    def get_topic_prerequisites(self, concept_id: str) -> List[dict]:
+        """V1 compat → get prerequisites for a concept"""
+        prereqs = self.get_prerequisites(concept_id, depth=3)
+        return [
+            {
+                "id": p["concept"].get("id", ""),
+                "name": p["concept"].get("name", ""),
+                "distance": p.get("distance", 1),
+            }
+            for p in prereqs
+        ]
+
+    def get_hierarchy(self, concept_id: str) -> dict:
+        """V1 compat → calls get_type_hierarchy()"""
+        return self.get_type_hierarchy(concept_id) or {"parents": [], "children": []}
+
+    def explore_graph(self, concept_id: str, depth: int = 2) -> dict:
+        """Explore the knowledge graph around a concept up to given depth"""
+        if not self.driver:
+            raise ConnectionError("Neo4j not connected")
+
+        query = """
+        MATCH path = (center:Concept {id: $id})-[r*1..$depth]-(connected)
+        WHERE all(node IN nodes(path) WHERE node:Concept OR node:Module OR node:Subject)
+        UNWIND nodes(path) AS n
+        UNWIND relationships(path) AS rel
+        WITH collect(DISTINCT n) AS all_nodes, collect(DISTINCT rel) AS all_rels
+        RETURN all_nodes, all_rels
+        """
+
+        try:
+            with self.driver.session() as session:
+                result = session.run(query, id=concept_id, depth=depth)
+                record = result.single()
+
+                if not record:
+                    return {"nodes": [], "edges": []}
+
+                nodes = [dict(n) for n in record["all_nodes"]]
+                edges = [
+                    {
+                        "from": dict(r.start_node).get("id", ""),
+                        "to": dict(r.end_node).get("id", ""),
+                        "type": r.type,
+                    }
+                    for r in record["all_rels"]
+                ]
+                return {"nodes": nodes, "edges": edges}
+        except Exception as e:
+            logger.error(f"explore_graph error: {e}")
+            return {"nodes": [], "edges": []}
 
 
 # Global instance

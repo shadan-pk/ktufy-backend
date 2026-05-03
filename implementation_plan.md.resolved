@@ -1,0 +1,171 @@
+# KTUfy Tools — Implementation Plan
+
+Based on your 8 decisions, here's how each change maps to code.
+
+---
+
+## Proposed Changes
+
+### 1. Group Study → WhatsApp Link
+
+#### [MODIFY] [ExploreScreen.tsx](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/ExploreScreen.tsx)
+
+Replace the [GroupStudy](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/GroupStudyScreen.tsx#63-532) tool card with a WhatsApp link card. Instead of navigating to [GroupStudyScreen](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/GroupStudyScreen.tsx#63-532), it will open the WhatsApp group invite URL via `Linking.openURL()`.
+
+```diff
+-{ key: 'GroupStudy', label: 'Group Study', icon: '⊕', desc: 'Join or create study groups', color: '#FBBF24' },
++{ key: 'WhatsApp', label: 'WhatsApp Group', icon: '💬', desc: 'Join our student community', color: '#25D366' },
+```
+
+> [!IMPORTANT]
+> **I need your WhatsApp group invite link** to implement this. Please provide it (e.g., `https://chat.whatsapp.com/XXXXX`).
+
+---
+
+### 2. Hide PYP Page
+
+#### [MODIFY] [ExploreScreen.tsx](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/ExploreScreen.tsx)
+
+Remove the PYP entry from the `toolCards` array:
+
+```diff
+-{ key: 'PYP', label: 'Previous Papers', icon: '⊞', desc: 'Past year question papers', color: '#E879F9' },
+```
+
+The [PYPScreen.tsx](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/PYPScreen.tsx), route, and navigation type will be kept for future reactivation (no file deletions).
+
+---
+
+### 3. AI-Powered Flashcard System (Must)
+
+This is the biggest new feature. The user enters a topic → backend generates flashcards via the RAG/AI system → displayed as swipeable cards.
+
+#### [NEW] [flashcardService.ts](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/services/flashcardService.ts)
+
+New service to call backend, following existing [chatService.ts](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/services/chatService.ts) pattern:
+
+```typescript
+// POST /api/v1/flashcards/generate
+// Request: { topic: string, count?: number }
+// Response: { flashcards: [{ front: string, back: string }] }
+export async function generateFlashcards(topic: string, count?: number)
+```
+
+#### [MODIFY] [ExploreScreen.tsx](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/ExploreScreen.tsx)
+
+Add a new tool card for Flashcards, or repurpose the existing Learning Zone flashcard section:
+
+```diff
++{ key: 'Flashcards', label: 'AI Flashcards', icon: '🎴', desc: 'Generate flashcards by topic', color: '#8B5CF6' },
+```
+
+#### Two implementation approaches:
+
+**Option A — Separate screen (recommended):** Create a dedicated `FlashcardScreen.tsx` with topic input + generated cards. Add to navigation.
+
+**Option B — Integrate into Learning Zone:** Replace the static flashcards in [LearningZoneScreen.tsx](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/LearningZoneScreen.tsx) with AI-generated ones via a topic input field.
+
+> [!IMPORTANT]
+> **Which approach do you prefer?** Separate screen (Option A) or part of Learning Zone (Option B)?
+>
+> Also, **does your backend already have a `/api/v1/flashcards/generate` endpoint**, or should I build the frontend assuming you'll add it later?
+
+---
+
+### 4. Learning Zone — Topic-Oriented Games
+
+#### [MODIFY] [LearningZoneScreen.tsx](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/LearningZoneScreen.tsx)
+
+- **Remove** Word Scramble and Math Sprint "Coming Soon" sections (lines 413-439)
+- **Add** a topic input field at the top
+- **Refactor** Quiz to use topic-based questions (from backend or AI)
+- Memory Match can use topic-related terms instead of random emojis
+
+This requires a backend endpoint like `POST /api/v1/learning/quiz/generate` that returns questions for a given topic. Similar to flashcard generation.
+
+> [!IMPORTANT]
+> This feature depends on your backend's AI/RAG capabilities. **Can your backend generate quiz questions given a topic?** If yes, I'll integrate it. If not, we can defer this and keep the current general-knowledge quizzes for now.
+
+---
+
+### 5. Coding Hub — Code Execution API
+
+#### [MODIFY] [CodingHubScreen.tsx](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/CodingHubScreen.tsx)
+
+Currently [runCode()](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/CodingHubScreen.tsx#256-337) (line 256-336) uses **fake simulation** — it pattern-matches keywords like "hello" and "world" in the code string. This needs to be replaced with a real code execution API.
+
+**Two options:**
+
+| Option | Approach | Cost | Latency |
+|--------|----------|------|---------|
+| **A. Judge0 API** | Free hosted API, send code + language, get output | Free (50 req/day) or self-hosted | ~2-5s |
+| **B. Your backend** | Add `POST /api/v1/coding/execute` endpoint with sandboxed execution | Free but needs setup | ~1-3s |
+
+> [!WARNING]
+> **Overhead assessment:** Adding code execution is moderate overhead. The frontend change is simple (~30 lines replacing the simulation). The complexity is on the backend side (sandboxing). Using Judge0's free API is the easiest path with minimal overhead.
+
+**Recommendation:** Start with Judge0 free tier for MVP, migrate to your own backend later if needed.
+
+---
+
+### 6. Schedule — Backend-Fetched Exam Schedule
+
+#### [MODIFY] [ScheduleScreen.tsx](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/ScheduleScreen.tsx)
+
+- Replace hardcoded `CalendarEvent[]` with API call: `GET /api/v1/schedule/exams`
+- Add loading state and error handling
+- Keep the same UI layout (month filtering, event type colors)
+
+#### [NEW] [scheduleService.ts](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/services/scheduleService.ts)
+
+```typescript
+export async function getExamSchedule(): Promise<CalendarEvent[]>
+```
+
+---
+
+### 7. Syllabus Viewer — Backend-Fetched from RAG
+
+#### [MODIFY] [SyllabusViewerScreen.tsx](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/screens/SyllabusViewerScreen.tsx)
+
+- Replace hardcoded `SUBJECTS_DATA` with API call: `GET /api/v1/syllabus?branch={branch}&semester={sem}`
+- Show actual syllabus content in-app instead of Alert → KTU website redirect
+- Display module-wise syllabus as expandable sections
+
+#### [NEW] [syllabusService.ts](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/services/syllabusService.ts)
+
+```typescript
+export async function getSyllabus(branch: string, semester: string)
+export async function getSubjectSyllabus(subjectCode: string)
+```
+
+---
+
+### 8. Library — Needs Decision
+
+> [!IMPORTANT]
+> You mentioned students already use **KTU Assist** for notes. The current Library uploads/downloads documents via Supabase Storage — essentially duplicating what KTU Assist does.
+>
+> **Options:**
+> - **A. Remove** Library from Explore (since KTU Assist exists) — but it's in the bottom tab bar
+> - **B. Repurpose** Library as a personal notes/bookmarks section (save important links, annotate topics)
+> - **C. Keep** Library as study material uploads (your own platform, not KTU Assist)
+>
+> **Which direction do you prefer?** This affects whether Library stays in the bottom tab bar.
+
+---
+
+## Verification Plan
+
+### Manual Testing (via Expo Go on device)
+
+Since this is a React Native/Expo app, all verification will be done manually on device:
+
+1. **Group Study → WhatsApp:** Tap the card → should open WhatsApp group invite in browser
+2. **PYP hidden:** Verify the grid shows 9 cards (not 10) and PYP is gone
+3. **AI Flashcards:** Enter a topic → verify flashcards are generated and swipeable
+4. **Learning Zone:** Verify Word Scramble & Math Sprint are removed; existing games still work
+5. **Schedule:** Verify exam schedule loads from backend (or shows error/loading state if backend is down)
+6. **Syllabus:** Verify syllabus loads from backend with real content displayed in-app
+
+The app is already running via `pnpm exec expo start`. Changes will hot-reload automatically.

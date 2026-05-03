@@ -18,9 +18,9 @@ from schemas.admin import (
     UploadedFileResponse, UploadedFilesListResponse,
     ModuleCreate, TopicCreate, RelationshipCreate
 )
-from services.syllabus_processor import syllabus_processor
-from services.neo4j_service import neo4j_service
-from services.embedding_service import embedding_service
+from services.syllabus_processor_v2 import syllabus_processor
+from services.neo4j_service_v2 import neo4j_service
+from services.embedding_service_v2 import embedding_service
 from services.active_users import active_user_tracker
 from utils.supabase_client import supabase_admin_client
 
@@ -204,6 +204,26 @@ async def get_job_status(job_id: str):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Graph Visualization
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/graph/data", summary="Get full knowledge graph for visualization")
+async def get_graph_data(
+    semester: Optional[int] = Query(None, ge=1, le=8),
+    branch: Optional[str] = Query(None),
+    regulation: Optional[str] = Query(None),
+):
+    """Return all nodes and edges for the interactive graph visualization"""
+    if not neo4j_service.is_connected():
+        raise HTTPException(status_code=503, detail="Neo4j not connected")
+
+    graph = neo4j_service.get_full_graph(
+        semester=semester, branch=branch, regulation=regulation
+    )
+    return graph
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Subject Management
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -229,19 +249,22 @@ async def list_subjects(
 
 
 @router.get("/subjects/{subject_code}", summary="Get subject details")
-async def get_subject(subject_code: str):
+async def get_subject(subject_code: str, regulation: str = "2019"):
     """
     Get detailed information about a subject including modules and topics
     """
     if not neo4j_service.is_connected():
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     
-    subject = neo4j_service.get_subject(subject_code)
+    subject = neo4j_service.get_subject(subject_code, regulation)
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
     
-    # Get modules with topics
-    modules = neo4j_service.get_modules(subject_code)
+    # Get modules with topics (Neo4j stores them as 'concepts', frontend expects 'topics')
+    modules = neo4j_service.get_modules(subject_code, regulation)
+    for m in modules:
+        if "concepts" in m and "topics" not in m:
+            m["topics"] = m.pop("concepts")
     subject["modules"] = modules
     
     return subject
@@ -273,23 +296,21 @@ async def create_subject(subject: SubjectCreate):
 @router.delete("/subjects/{subject_code}", summary="Delete a subject")
 async def delete_subject(subject_code: str):
     """
-    Delete a subject from both knowledge graph and embeddings
+    Delete a subject from knowledge graph, embeddings, and syllabus database
     """
-    if not neo4j_service.is_connected():
-        raise HTTPException(status_code=503, detail="Neo4j not connected")
-    
     result = syllabus_processor.delete_subject(
         subject_code=subject_code,
         supabase_client=supabase_admin_client
     )
     
-    if not result["knowledge_graph"]:
+    if not result["knowledge_graph"] and not result.get("database_deleted"):
         raise HTTPException(status_code=404, detail="Subject not found")
     
     return {
         "message": "Subject deleted successfully",
         "subject_code": subject_code,
-        "embeddings_deleted": result["embeddings_deleted"]
+        "embeddings_deleted": result["embeddings_deleted"],
+        "database_deleted": result.get("database_deleted", False),
     }
 
 
@@ -298,14 +319,17 @@ async def delete_subject(subject_code: str):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/subjects/{subject_code}/modules", summary="Get modules for a subject")
-async def get_subject_modules(subject_code: str):
+async def get_subject_modules(subject_code: str, regulation: str = "2019"):
     """
     Get all modules for a specific subject
     """
     if not neo4j_service.is_connected():
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     
-    modules = neo4j_service.get_modules(subject_code)
+    modules = neo4j_service.get_modules(subject_code, regulation)
+    for m in modules:
+        if "concepts" in m and "topics" not in m:
+            m["topics"] = m.pop("concepts")
     return {
         "subject_code": subject_code,
         "modules": modules,

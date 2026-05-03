@@ -6,3 +6,7 @@ Contains all Pydantic models for request/response validation
 from schemas.user import *
 from schemas.chat import *
 from schemas.admin import *
+from schemas.flashcard import *
+from schemas.syllabus import *
+from schemas.learning import *
+from schemas.coding import *

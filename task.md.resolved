@@ -1,0 +1,29 @@
+# KTUfy Tools Implementation
+
+## Phase 1 — Quick Changes
+- [/] Replace Group Study tool card with WhatsApp group link (test URL)
+- [/] Hide PYP page from Explore tools grid
+- [/] Remove "Coming Soon" games (Word Scramble, Math Sprint) from Learning Zone
+
+## Phase 2 — AI Flashcards (Must) — Separate Screen
+- [ ] Create `FlashcardScreen.tsx` with topic input + AI-generated flashcards
+- [ ] Add `flashcardService.ts` calling `POST /api/v1/flashcards/generate`
+- [ ] Add navigation route + tool card in Explore
+- [ ] Add Flashcard card in Learning Zone linking to Flashcard screen
+
+## Phase 3 — Backend-Fetched Features
+- [ ] Schedule: Fetch exam schedule from `GET /api/v1/schedule/exams`
+- [ ] Syllabus: Fetch from `GET /api/v1/syllabus?branch=&semester=`
+
+## Phase 4 — Library → Personal Notes/Bookmarks
+- [ ] Repurpose Library as personal notes/bookmarks section
+
+## Phase 5 — Coding Hub (Judge0)
+- [ ] Integrate Judge0 free API for real code execution
+
+## Phase 6 — Learning Zone Topic-Oriented Quizzes
+- [ ] Add topic input + call `POST /api/v1/learning/quiz/generate`
+- [ ] Refactor quiz to use AI-generated topic-specific questions
+
+## Phase 7 — Update endpoints.md
+- [ ] Add all new endpoints to [endpoints.md](file:///e:/KTUfy_Project/ktufy-frontend/KTUfy/endpoints.md)

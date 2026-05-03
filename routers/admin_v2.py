@@ -330,25 +330,23 @@ async def get_subject(subject_code: str, regulation: str = "2019"):
 @router.delete("/subjects/{subject_code}", summary="Delete a subject (V2)")
 async def delete_subject(subject_code: str, regulation: str = "2019"):
     """
-    Delete a subject from both knowledge graph and embeddings
+    Delete a subject from knowledge graph, embeddings, and syllabus database
     """
-    if not neo4j_service.is_connected():
-        raise HTTPException(status_code=503, detail="Neo4j not connected")
-    
     result = syllabus_processor.delete_subject(
         subject_code=subject_code,
         regulation=regulation,
         supabase_client=supabase_admin_client
     )
     
-    if not result["knowledge_graph"]:
+    if not result["knowledge_graph"] and not result.get("database_deleted"):
         raise HTTPException(status_code=404, detail="Subject not found")
     
     return {
         "message": "Subject deleted successfully",
         "subject_code": subject_code,
         "regulation": regulation,
-        "embeddings_deleted": result["embeddings_deleted"]
+        "embeddings_deleted": result["embeddings_deleted"],
+        "database_deleted": result.get("database_deleted", False),
     }
 
 
@@ -561,14 +559,16 @@ async def search_syllabus(query: SearchQueryV2):
     start_time = time.time()
     
     # Route the query
-    route_result = query_router.route_query(query.query)
+    query_type, route_metadata = query_router.route(query.query)
+    chunk_types_for_search = query_router.get_vector_chunk_types(query.query)
+    extracted_entities = route_metadata.get("extracted_entities", [])
     
     results = {
         "query": query.query,
         "routing": {
-            "type": route_result.query_type.value,
-            "chunk_types": route_result.chunk_types,
-            "entities": route_result.entities
+            "type": query_type.value,
+            "chunk_types": chunk_types_for_search,
+            "entities": extracted_entities
         },
         "kg_results": [],
         "vector_results": [],
@@ -576,30 +576,25 @@ async def search_syllabus(query: SearchQueryV2):
     }
     
     # Execute based on routing
-    if route_result.query_type.value in ["KG_ONLY", "KG_THEN_VECTOR", "HYBRID"]:
+    if query_type.value in ["kg_only", "kg_then_vector", "hybrid"]:
         # Search Knowledge Graph
         if neo4j_service.is_connected():
-            if route_result.entities:
-                # Search for specific concepts
-                kg_results = neo4j_service.search_concepts(
-                    route_result.entities[0] if route_result.entities else query.query,
-                    limit=query.limit
-                )
-            else:
-                kg_results = neo4j_service.search_concepts(query.query, limit=query.limit)
+            entity_values = [e.get("value", "") for e in extracted_entities if isinstance(e.get("value"), str)]
+            search_term = entity_values[0] if entity_values else query.query
+            kg_results = neo4j_service.search_concepts(search_term, limit=query.limit)
             results["kg_results"] = kg_results
     
-    if route_result.query_type.value in ["VECTOR_ONLY", "VECTOR_THEN_KG", "HYBRID"]:
+    if query_type.value in ["vector_only", "vector_then_kg", "hybrid"]:
         # Search Vector Store
         if embedding_service.is_ready():
-            vector_results = embedding_service.search_similar(
+            vector_results = embedding_service.search(
                 supabase_client=supabase_admin_client,
                 query=query.query,
                 limit=query.limit,
                 semester=query.semester,
                 branch=query.branch,
                 subject_code=query.subject_code,
-                chunk_types=query.chunk_types or route_result.chunk_types
+                chunk_types=query.chunk_types or chunk_types_for_search
             )
             results["vector_results"] = vector_results
     
@@ -631,16 +626,18 @@ async def analyze_query(query: str):
     """
     Analyze how a query would be routed without executing it
     """
-    result = query_router.route_query(query)
+    query_type, metadata = query_router.route(query)
+    chunk_types = query_router.get_vector_chunk_types(query)
+    kg_query_type = query_router.get_kg_query_type(query)
     
     return {
         "query": query,
         "analysis": {
-            "query_type": result.query_type.value,
-            "recommended_chunk_types": result.chunk_types,
-            "extracted_entities": result.entities,
-            "confidence": result.confidence,
-            "reasoning": result.reasoning
+            "query_type": query_type.value,
+            "recommended_chunk_types": chunk_types,
+            "extracted_entities": metadata.get("extracted_entities", []),
+            "detected_patterns": metadata.get("detected_patterns", []),
+            "kg_query_type": kg_query_type,
         }
     }
 
@@ -769,14 +766,20 @@ async def delete_file(filename: str):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/learning-path/{concept_id}", summary="Get learning path (V2)")
-async def get_learning_path(concept_id: str, max_depth: int = 5):
+async def get_learning_path(concept_id: str, to_concept_id: Optional[str] = None):
     """
-    Get the recommended learning path for a concept based on prerequisites
+    Get the recommended learning path for a concept based on prerequisites.
+    If to_concept_id is provided, finds shortest path between the two concepts.
+    Otherwise returns the prerequisite chain.
     """
     if not neo4j_service.is_connected():
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     
-    path = neo4j_service.get_learning_path(concept_id, max_depth)
+    if to_concept_id:
+        path = neo4j_service.get_learning_path(concept_id, to_concept_id)
+    else:
+        # Fall back to prerequisites
+        path = neo4j_service.get_topic_prerequisites(concept_id)
     
     return {
         "target_concept": concept_id,

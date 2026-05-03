@@ -2,21 +2,32 @@
 KTUfy Backend API
 Main application entry point
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
 from dotenv import load_dotenv
 import os
 
+# Load environment variables BEFORE importing routers/services
+# (services like Neo4j read env vars at import time)
+load_dotenv()
+
 # Import routers
 from routers import auth as auth_router
 from routers import chat as chat_router
 from routers import admin as admin_router
 from routers import admin_v2 as admin_v2_router  # V2 KG-RAG corrected router
+from routers import flashcards as flashcards_router
+from routers import syllabus as syllabus_router
+from routers import learning as learning_router
+from routers import coding as coding_router
+from routers import media as media_router
 
-# Load environment variables
-load_dotenv()
+# Import auth dependencies for the users route alias
+from app.auth import get_current_user, AuthenticatedUser
+from schemas.user import MessageResponse
+from utils.supabase_client import supabase_admin_client
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -35,6 +46,11 @@ app.include_router(auth_router.router)
 app.include_router(chat_router.router)
 app.include_router(admin_router.router)
 app.include_router(admin_v2_router.router)  # V2 endpoints at /api/v2/admin
+app.include_router(flashcards_router.router)
+app.include_router(syllabus_router.router)
+app.include_router(learning_router.router)
+app.include_router(coding_router.router)
+app.include_router(media_router.router)
 
 # Configure CORS
 app.add_middleware(
@@ -53,6 +69,33 @@ async def admin_dashboard():
     Serve the Admin Dashboard HTML page
     """
     return FileResponse("templates/admin.html")
+
+
+# DELETE /api/v1/users/{user_id} — route alias expected by frontend
+# (Backend also has this at DELETE /api/v1/auth/users/{user_id})
+@app.delete("/api/v1/users/{user_id}", response_model=MessageResponse, tags=["Authentication"])
+async def delete_user_account_alias(
+    user_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Delete a user account permanently.
+
+    Users can only delete their own account unless they have admin privileges.
+    """
+    if current_user.user_id != user_id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own account"
+        )
+    try:
+        supabase_admin_client.auth.admin.delete_user(user_id)
+        return MessageResponse(message="Account deleted successfully.", success=True)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting user account: {str(e)}"
+        )
 
 
 

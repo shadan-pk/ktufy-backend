@@ -1,6 +1,7 @@
 # Core FastAPI dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
+gunicorn==21.2.0
 python-multipart==0.0.6
 pydantic==2.5.0
 pydantic-settings==2.1.0
@@ -38,6 +39,8 @@ sse-starlette>=1.8.2       # Server-sent events for streaming
 
 # PDF Processing
 pdfplumber>=0.10.0         # PDF text extraction
+PyMuPDF>=1.23.0            # PDF manipulation (merge, split, compress, pdf-to-images)
+Pillow>=10.0.0             # Image processing (convert, compress, resize, images-to-pdf)
 
 # Knowledge Graph (Neo4j)
 neo4j>=5.14.0              # Neo4j Python driver
