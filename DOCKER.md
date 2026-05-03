@@ -52,6 +52,7 @@ docker compose down
 - Backend health: http://localhost:8000/health
 - API docs (via Nginx): http://localhost/docs
 - Neo4j browser: http://localhost:7474
+- Admin dashboard: http://localhost:8000/admin
 
 ## Common Changes
 
@@ -59,8 +60,68 @@ docker compose down
 - Change Nginx rules: edit nginx/nginx.conf
 - Change exposed ports: edit docker-compose.yml
 
+## Update and Rebuild
+
+Rebuild backend (use cache):
+
+```powershell
+docker compose build backend
+docker compose up -d backend
+```
+
+Rebuild backend (no cache):
+
+```powershell
+docker compose build --no-cache backend
+docker compose up -d backend
+```
+
+Rebuild everything:
+
+```powershell
+docker compose build
+docker compose up -d
+```
+
+Restart without rebuilding:
+
+```powershell
+docker compose restart backend
+```
+
+Clean build cache if you see snapshot errors:
+
+```powershell
+docker builder prune -af
+```
+
 ## Troubleshooting
 
 - If /health fails, check backend logs: docker compose logs -f backend
 - If Neo4j is not reachable, verify NEO4J_URI and NEO4J_PASSWORD in .env
 - If ports are in use, change the host port mappings in docker-compose.yml
+
+## Helpful Notes
+
+- When backend runs in Docker, use service name for Neo4j: NEO4J_URI=bolt://neo4j:7687
+- When backend runs locally, use host URI: NEO4J_URI=bolt://localhost:7687
+- To avoid Hugging Face rate limits, set HF_TOKEN in .env
+
+## CI/CD (GitHub Actions → Heroku Container)
+
+1) Create these GitHub repo secrets:
+- HEROKU_API_KEY (from Heroku Account Settings)
+- HEROKU_APP_NAME (your Heroku app name)
+
+Path: GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+
+2) Push to main
+- The workflow at .github/workflows/heroku-container-deploy.yml builds and deploys automatically
+
+## Useful Links
+
+- Admin UI: http://localhost:8000/admin
+- Swagger: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+- Health: http://localhost:8000/health
+- Neo4j Browser: http://localhost:7474

@@ -9,6 +9,7 @@ services:
       - HF_HOME=/app/.cache/hf
       - TRANSFORMERS_CACHE=/app/.cache/hf
       - SENTENCE_TRANSFORMERS_HOME=/app/.cache/hf
+      - NEO4J_URI=bolt://neo4j:7687
     expose:
       - "8000"
     volumes:
