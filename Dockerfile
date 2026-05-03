@@ -27,7 +27,7 @@ COPY . .
 
 # Create non-root user and required dirs
 RUN adduser --disabled-password --no-create-home appuser && \
-    mkdir -p /app/uploads /app/vector_store && \
+    mkdir -p /app/uploads /app/vector_store /app/.cache/hf && \
     chown -R appuser:appuser /app
 
 USER appuser

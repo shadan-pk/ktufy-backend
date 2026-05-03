@@ -11,6 +11,24 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+def _coerce_int(value) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        if stripped.isdigit():
+            return int(stripped)
+    return None
+
+
 def to_canonical_id(text: str, prefix: str = "") -> str:
     """Convert text to canonical snake_case ID"""
     clean = re.sub(r'[^a-zA-Z0-9\s]', '', text)
@@ -196,6 +214,11 @@ class Neo4jServiceV2:
         """Create a subject node"""
         if not self.driver:
             raise ConnectionError("Neo4j not connected")
+
+        code = str(subject_data.get("code", "")).strip()
+        name = str(subject_data.get("name", "")).strip()
+        if not code or not name:
+            raise ValueError("Subject code/name required")
         
         query = """
         MERGE (s:Subject {code: $code, regulation: $regulation})
@@ -213,21 +236,21 @@ class Neo4jServiceV2:
         RETURN s
         """
         
-        subject_id = to_canonical_id(subject_data["name"], subject_data["code"].lower())
+        subject_id = to_canonical_id(name, code.lower())
         
         with self.driver.session() as session:
             result = session.run(
                 query,
-                code=subject_data["code"],
+                code=code,
                 regulation=regulation,
                 id=subject_id,
-                name=subject_data["name"],
-                display_name=subject_data["name"],
-                credits=subject_data.get("credits", 0),
+                name=name,
+                display_name=name,
+                credits=_coerce_int(subject_data.get("credits")),
                 category=subject_data.get("category", ""),
                 semester=semester,
                 branch=branch,
-                hours_per_week=subject_data.get("hours_per_week", 0),
+                hours_per_week=_coerce_int(subject_data.get("hours_per_week")),
                 textbooks=subject_data.get("textbooks", []),
                 course_outcomes=subject_data.get("course_outcomes", [])
             )

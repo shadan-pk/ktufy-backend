@@ -203,7 +203,16 @@ IMPORTANT: Return ONLY the JSON. Copy text VERBATIM from syllabus."""
         """Extract structure with verbatim text"""
         prompt = self._build_verbatim_extraction_prompt(text, semester, branch)
         response = self._call_llm(prompt)
-        return self._parse_json_response(response)
+        try:
+            return self._parse_json_response(response)
+        except ValueError as e:
+            logger.warning("Parse failed, retrying with strict JSON output: %s", e)
+            retry_prompt = (
+                prompt
+                + "\n\nReturn ONLY raw JSON. No code fences, no markdown, no commentary."
+            )
+            response = self._call_llm(retry_prompt)
+            return self._parse_json_response(response)
     
     def _normalize_to_atomic_concepts(self, raw_data: dict) -> dict:
         """
@@ -215,13 +224,25 @@ IMPORTANT: Return ONLY the JSON. Copy text VERBATIM from syllabus."""
         normalized_subjects = []
         
         for subject in raw_data.get("subjects", []):
-            subject_code = subject["code"]
-            subject_id = to_canonical_id(subject["name"], prefix=subject_code.lower())
+            subject_code = str(subject.get("code", "")).strip()
+            subject_name = str(subject.get("name", "")).strip()
+            if not subject_code or not subject_name:
+                logger.warning("Skipping subject with missing code/name: %s", subject)
+                continue
+
+            subject_id = to_canonical_id(subject_name, prefix=subject_code.lower())
             
             normalized_modules = []
             
             for module in subject.get("modules", []):
-                module_num = module["number"]
+                module_num = module.get("number")
+                if isinstance(module_num, str):
+                    module_num = module_num.strip()
+                    if module_num.isdigit():
+                        module_num = int(module_num)
+                if not module_num:
+                    logger.warning("Skipping module with missing number for subject %s", subject_code)
+                    continue
                 module_id = f"{subject_code.lower()}_m{module_num}"
                 
                 atomic_topics = []
@@ -268,6 +289,8 @@ IMPORTANT: Return ONLY the JSON. Copy text VERBATIM from syllabus."""
             normalized_subject = {
                 **subject,
                 "id": subject_id,
+                "code": subject_code,
+                "name": subject_name,
                 "modules": normalized_modules
             }
             normalized_subjects.append(normalized_subject)
@@ -519,8 +542,12 @@ Recommended Textbooks and References:
     
     def _parse_json_response(self, response_text: str) -> Any:
         """Parse JSON from LLM response"""
+        cleaned = response_text.strip()
+        cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'\s*```$', '', cleaned)
+
         try:
-            return json.loads(response_text)
+            return json.loads(cleaned)
         except json.JSONDecodeError:
             pass
         
@@ -539,6 +566,22 @@ Recommended Textbooks and References:
                     return json.loads(json_str)
                 except json.JSONDecodeError:
                     continue
+
+        # Fallback: best-effort slice from first opener to last closer
+        start_obj = cleaned.find("{")
+        start_arr = cleaned.find("[")
+        if start_obj != -1 or start_arr != -1:
+            if start_obj == -1 or (start_arr != -1 and start_arr < start_obj):
+                end = cleaned.rfind("]")
+                start = start_arr
+            else:
+                end = cleaned.rfind("}")
+                start = start_obj
+            if end > start:
+                try:
+                    return json.loads(cleaned[start:end + 1])
+                except json.JSONDecodeError:
+                    pass
         
         raise ValueError(f"Could not parse JSON from response: {response_text[:500]}...")
     

@@ -17,6 +17,23 @@ class SyllabusDBService:
 
     # ─── Write Operations (called during syllabus processing) ─────────
 
+    def _coerce_int(self, value) -> Optional[int]:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            if stripped.isdigit():
+                return int(stripped)
+        return None
+
     def upsert_subject(self, admin_client, subject_data: dict, semester: int, branch: str, regulation: str = "2019") -> Optional[dict]:
         """
         Upsert a subject into syllabus_subjects.
@@ -29,9 +46,9 @@ class SyllabusDBService:
                 "branch": branch,
                 "semester": semester,
                 "regulation": regulation,
-                "credits": subject_data.get("credits"),
+                "credits": self._coerce_int(subject_data.get("credits")),
                 "category": subject_data.get("category", ""),
-                "hours_per_week": subject_data.get("hours_per_week"),
+                "hours_per_week": self._coerce_int(subject_data.get("hours_per_week")),
                 "course_outcomes": subject_data.get("course_outcomes", []),
                 "textbooks": subject_data.get("textbooks", []),
                 "references": subject_data.get("references", []),
@@ -55,12 +72,17 @@ class SyllabusDBService:
         Returns the upserted row (with id) or None on failure.
         """
         try:
+            module_number = self._coerce_int(module_data.get("number"))
+            if module_number is None:
+                logger.warning("Skipping module with invalid number for %s: %s", subject_code, module_data.get("number"))
+                return None
+
             row = {
                 "subject_code": subject_code,
                 "regulation": regulation,
-                "module_number": module_data["number"],
+                "module_number": module_number,
                 "name": module_data.get("name", f"Module {module_data['number']}"),
-                "hours": module_data.get("hours"),
+                "hours": self._coerce_int(module_data.get("hours")),
                 "syllabus_text": module_data.get("syllabus_text", ""),
             }
 

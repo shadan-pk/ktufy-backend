@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class QueryType(Enum):
     """Types of queries for routing"""
+    NO_RAG = "no_rag"  # Smalltalk, greetings, chit-chat
     KG_ONLY = "kg_only"  # Structural queries (prerequisites, relationships)
     VECTOR_ONLY = "vector_only"  # Content retrieval (definitions, explanations)
     KG_THEN_VECTOR = "kg_then_vector"  # Get context from KG, then retrieve content
@@ -80,9 +81,29 @@ class QueryRouter:
         "all topics in", "everything in", "covered in",
         "module", "subject", "chapter"
     ]
+
+    SMALLTALK_PATTERNS = [
+        r"^(hi|hello|hey|yo|hiya|sup)\b",
+        r"^(good\s*(morning|afternoon|evening|night))\b",
+        r"^(thanks|thank\s*you|thx)\b",
+        r"^(bye|goodbye|see\s*you)\b",
+        r"^(how\s*are\s*you|how's\s*it\s*going|whats\s*up|what's\s*up)\b"
+    ]
     
     def __init__(self):
         pass
+
+    def _is_smalltalk(self, query: str) -> bool:
+        """Detect short greetings and smalltalk to skip RAG"""
+        query_clean = query.strip().lower()
+
+        if not query_clean:
+            return True
+
+        if len(query_clean) <= 12 and re.fullmatch(r"[a-z\s!?.']+", query_clean):
+            return True
+
+        return any(re.match(pattern, query_clean) for pattern in self.SMALLTALK_PATTERNS)
     
     def route(self, query: str) -> Tuple[QueryType, Dict[str, Any]]:
         """
@@ -100,6 +121,10 @@ class QueryRouter:
             "detected_patterns": [],
             "extracted_entities": []
         }
+
+        if self._is_smalltalk(query):
+            metadata["detected_patterns"].append("smalltalk")
+            return QueryType.NO_RAG, metadata
         
         # Check for structural keywords
         has_structural = any(kw in query_lower for kw in self.STRUCTURAL_KEYWORDS)

@@ -78,6 +78,10 @@ class ChatService:
                 "metadata": metadata
             }
             print(f"   📍 Query routing: {query_type.value}")
+
+            if query_type == QueryType.NO_RAG:
+                context["has_context"] = False
+                return context
             
             # Fetch from Knowledge Graph
             if query_type in [QueryType.KG_ONLY, QueryType.KG_THEN_VECTOR, QueryType.HYBRID]:

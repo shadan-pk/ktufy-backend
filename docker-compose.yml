@@ -5,6 +5,10 @@ services:
     build: .
     container_name: ktufy-backend
     env_file: .env
+    environment:
+      - HF_HOME=/app/.cache/hf
+      - TRANSFORMERS_CACHE=/app/.cache/hf
+      - SENTENCE_TRANSFORMERS_HOME=/app/.cache/hf
     expose:
       - "8000"
     volumes:
