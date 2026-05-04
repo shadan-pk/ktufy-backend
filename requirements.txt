@@ -30,9 +30,9 @@ python-dateutil==2.8.2
 requests==2.31.0  # For testing endpoints
 
 # AI/ML Models
-groq>=0.4.0                # Cloud LLM (Groq API)
-httpx>=0.25.0              # Async HTTP client for Ollama
-openai>=1.0.0              # OpenAI API (optional fallback)
+google-generativeai>=0.7.2  # Cloud LLM (Gemini API)
+httpx>=0.25.0               # Async HTTP client for Ollama
+openai>=1.0.0               # OpenAI API (optional fallback)
 
 # Streaming (optional for future)
 sse-starlette>=1.8.2       # Server-sent events for streaming

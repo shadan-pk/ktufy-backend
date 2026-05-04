@@ -390,7 +390,7 @@ async def get_chat_info(
     
     **Requires authentication**: Bearer token in Authorization header
     
-    Returns information about the AI provider being used (Groq or Ollama).
+    Returns information about the AI provider being used (Gemini or Ollama).
     
     Returns:
         dict: Chat service information

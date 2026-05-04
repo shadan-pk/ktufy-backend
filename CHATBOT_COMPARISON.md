@@ -1,51 +1,51 @@
 # 🤖 Chatbot Deployment Options - Quick Comparison
 
-## TL;DR Recommendation: **Groq API + Ollama Hybrid** 🎯
+## TL;DR Recommendation: **Gemini API + Ollama Hybrid** 🎯
 
 ---
 
 ## 📊 Detailed Comparison
 
-| Feature | Groq API | Ollama (Local) | Google Colab | OpenAI |
+| Feature | Gemini API | Ollama (Local) | Google Colab | OpenAI |
 |---------|----------|----------------|--------------|--------|
-| **Cost** | ✅ Free (14.4K req/day) | ✅ Free | ✅ Free (with limits) | ❌ Paid ($$$) |
-| **Speed** | ⚡ Extremely Fast (0.5-2s) | 🚀 Fast (2-5s) | 🐌 Slow (5-15s) | ⚡ Fast (1-3s) |
+| **Cost** | ✅ Free (with quota) | ✅ Free | ✅ Free (with limits) | ❌ Paid ($$$) |
+| **Speed** | ⚡ Fast (1-3s) | 🚀 Fast (2-5s) | 🐌 Slow (5-15s) | ⚡ Fast (1-3s) |
 | **Reliability** | ✅ 99.9% uptime | ✅ Always available | ❌ Session timeouts | ✅ 99.9% uptime |
 | **Setup** | ✅ 5 minutes | ⚠️ 15 minutes | ❌ Complex | ✅ 5 minutes |
 | **Production Ready** | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes |
 | **Offline Support** | ❌ No | ✅ Yes | ❌ No | ❌ No |
-| **Privacy** | ⚠️ Data sent to Groq | ✅ 100% local | ⚠️ Data sent to Google | ⚠️ Data sent to OpenAI |
+| **Privacy** | ⚠️ Data sent to Google | ✅ 100% local | ⚠️ Data sent to Google | ⚠️ Data sent to OpenAI |
 | **Hardware Required** | None | Good CPU/GPU | None | None |
-| **Model Quality** | ⭐⭐⭐⭐⭐ Llama 3.1 | ⭐⭐⭐⭐ Llama 3 | ⭐⭐⭐⭐⭐ Any model | ⭐⭐⭐⭐⭐ GPT-4 |
-| **Rate Limits** | 14,400/day | ♾️ Unlimited | 90min idle, 12hr max | Depends on plan |
+| **Model Quality** | ⭐⭐⭐⭐⭐ Gemini 1.5 | ⭐⭐⭐⭐ Llama 3 | ⭐⭐⭐⭐⭐ Any model | ⭐⭐⭐⭐⭐ GPT-4 |
+| **Rate Limits** | Depends on plan | ♾️ Unlimited | 90min idle, 12hr max | Depends on plan |
 | **Best For** | Production MVP | Offline/Testing | Experimentation | Production (budget) |
 
 ---
 
 ## 🎯 My Recommendation for You
 
-### **Hybrid Approach: Groq + Ollama**
+### **Hybrid Approach: Gemini + Ollama**
 
 ```
-Primary: Groq API (for production)
+Primary: Gemini API (for production)
    ↓
-   Fast, reliable, free tier
+   Fast, reliable, low-cost
    Perfect for your MVP and testing
    
 Fallback: Ollama (for development/offline)
    ↓
    Use when developing locally
-   Backup when Groq quota reached
+   Backup when Gemini quota reached
    Offline demonstration capability
 ```
 
 ### **Why This Works Best:**
 
-1. **Start Simple** - Groq API
+1. **Start Simple** - Gemini API
    - Get chatbot working in 1 day
    - Zero infrastructure setup
-   - Free tier covers development
-   - 330 tokens/second (extremely fast)
+   - Free quota covers development
+   - Great quality at low cost
 
 2. **Add Local Later** - Ollama
    - Install when needed
@@ -54,7 +54,7 @@ Fallback: Ollama (for development/offline)
    - Development without API calls
 
 3. **Scale When Ready**
-   - Groq Pro: $0.10-0.27 per 1M tokens (very cheap)
+   - Gemini pricing scales predictably
    - Or upgrade to self-hosted
    - Or switch to OpenAI for advanced features
 
@@ -99,14 +99,14 @@ Fallback: Ollama (for development/offline)
 
 ## ✅ Implementation Priority
 
-### **Week 1: Basic Chat with Groq**
+### **Week 1: Basic Chat with Gemini**
 ```bash
 Day 1-2: Database tables + Basic endpoints
-Day 3-4: Groq integration + Testing
+Day 3-4: Gemini integration + Testing
 Day 5:   Frontend connection
 ```
 
-**Why Groq First:**
+**Why Gemini First:**
 - ✅ Setup in 5 minutes
 - ✅ Works immediately
 - ✅ Professional quality
@@ -130,32 +130,30 @@ Day 3: Test switching between models
 
 ## 🔥 Quick Start Guide
 
-### **Option 1: Groq (5 Minutes Setup)** ⭐
+### **Option 1: Gemini (5 Minutes Setup)** ⭐
 
 ```bash
 # 1. Get API Key
-Visit: https://console.groq.com/keys
-Sign up → Copy API key
+Visit: https://aistudio.google.com/app/apikey
+Sign up → Create API key
 
 # 2. Add to .env
-echo GROQ_API_KEY=gsk_your_key_here >> .env
+echo GEMINI_API_KEY=your_key_here >> .env
 
 # 3. Install
-pip install groq
+pip install google-generativeai
 
 # 4. Done! Start coding
 ```
 
 **Code to test:**
 ```python
-from groq import Groq
+import google.generativeai as genai
 
-client = Groq(api_key="your_key")
-response = client.chat.completions.create(
-    model="llama-3.1-8b-instant",
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-print(response.choices[0].message.content)
+genai.configure(api_key="your_key")
+model = genai.GenerativeModel("gemini-1.5-flash")
+response = model.generate_content("Hello!")
+print(response.text)
 ```
 
 ### **Option 2: Ollama (15 Minutes Setup)**
@@ -182,19 +180,19 @@ ollama run llama3 "Hello!"
 ## 💰 Cost Analysis
 
 ### **Development (0-1000 users):**
-- **Groq:** $0/month (free tier)
+- **Gemini:** $0/month (free quota)
 - **Ollama:** $0/month (free)
 - **OpenAI:** $50-200/month
 - **Colab:** $0 (but unreliable)
 
 ### **Production (1000+ users):**
-- **Groq Pro:** ~$10-30/month
+- **Gemini:** Low per-token cost (plan-dependent)
 - **Ollama:** Server costs (~$50-100/month)
 - **OpenAI:** $200-500/month
 - **Colab:** Not viable
 
-### **Winner: Groq** 🏆
-Free tier → covers MVP → cheap upgrade path
+### **Winner: Gemini** 🏆
+Free quota → covers MVP → cheap upgrade path
 
 ---
 
@@ -202,12 +200,12 @@ Free tier → covers MVP → cheap upgrade path
 
 | Your Need | Best Solution |
 |-----------|---------------|
-| Quick MVP | ✅ Groq API |
-| Development/Testing | ✅ Groq or Ollama |
-| Production (small) | ✅ Groq API |
+| Quick MVP | ✅ Gemini API |
+| Development/Testing | ✅ Gemini or Ollama |
+| Production (small) | ✅ Gemini API |
 | Production (large) | ✅ Ollama self-hosted |
 | Offline capability | ✅ Ollama |
-| Cost optimization | ✅ Groq (free) → Ollama (scale) |
+| Cost optimization | ✅ Gemini (free quota) → Ollama (scale) |
 | Experimentation | ❌ NOT Colab |
 
 ---
@@ -216,9 +214,9 @@ Free tier → covers MVP → cheap upgrade path
 
 ### **Immediate (Today):**
 1. ✅ Read CHATBOT_IMPLEMENTATION_GUIDE.md
-2. ✅ Get Groq API key (5 min)
+2. ✅ Get Gemini API key (5 min)
 3. ✅ Run SQL to create tables (10 min)
-4. ✅ Test Groq connection (5 min)
+4. ✅ Test Gemini connection (5 min)
 
 ### **This Week:**
 1. Implement chat endpoints
@@ -236,10 +234,10 @@ Free tier → covers MVP → cheap upgrade path
 
 ## 🎓 Learning Resources
 
-**Groq:**
-- Docs: https://console.groq.com/docs
-- Examples: https://github.com/groq/groq-python
-- Models: https://console.groq.com/docs/models
+**Gemini:**
+- Docs: https://ai.google.dev/gemini-api/docs
+- Examples: https://github.com/google-gemini/generative-ai-python
+- Models: https://ai.google.dev/gemini-api/docs/models
 
 **Ollama:**
 - Docs: https://ollama.com/
@@ -256,7 +254,7 @@ Free tier → covers MVP → cheap upgrade path
 
 **Recommended Path:**
 ```
-Today:    Get Groq API key + Create database tables
+Today:    Get Gemini API key + Create database tables
 Day 2-3:  Implement basic endpoints
 Day 4-5:  Connect frontend + test
 Week 2+:  Add advanced features (RAG, streaming, etc.)
