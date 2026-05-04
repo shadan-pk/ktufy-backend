@@ -37,7 +37,9 @@ jobs:
             cd /home/ktufy2026/ktufy/ktufy-backend
 
             echo "→ Pulling latest code..."
-            git pull origin v3.0_test
+            git config pull.rebase false
+            git fetch origin v3.0_test
+            git reset --hard origin/v3.0_test
 
             echo "→ Rebuilding containers..."
             docker compose up -d --build
