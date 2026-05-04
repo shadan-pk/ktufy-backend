@@ -36,27 +36,27 @@ async def admin_login() -> str:
     <h1>KTUfy Admin</h1>
     <input type=\"email\" id=\"email\" placeholder=\"Admin email\" />
     <input type=\"password\" id=\"password\" placeholder=\"Password\" />
-    <button onclick=\"login()\">Sign In</button>
+    <button onclick=\"adminLogin()\">Sign In</button>
     <p class=\"error\" id=\"err\"></p>
   </div>
 
   <script src=\"https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2\"></script>
   <script>
-    const supabase = window.supabase.createClient(
+    const sb = window.supabase.createClient(
       '{settings.supabase_url}',
       '{settings.supabase_anon_key}'
     )
 
-    async function login() {{
+    window.adminLogin = async function adminLogin() {{
       const email = document.getElementById('email').value
       const password = document.getElementById('password').value
       document.getElementById('err').textContent = ''
 
-      const {{ data, error }} = await supabase.auth.signInWithPassword({{ email, password }})
+      const {{ data, error }} = await sb.auth.signInWithPassword({{ email, password }})
       if (error) return (document.getElementById('err').textContent = error.message)
 
       if (data.user?.app_metadata?.role !== 'admin') {{
-        await supabase.auth.signOut()
+        await sb.auth.signOut()
         document.getElementById('err').textContent = 'This account does not have admin access.'
         return
       }}
@@ -109,6 +109,28 @@ async def admin_logout() -> RedirectResponse:
 async def admin_dashboard(admin_user: dict = Depends(require_admin)) -> str:
     email = admin_user.get("email", "")
     return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <title>Admin Dashboard - KTUfy</title>
+      <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{ font-family: system-ui, sans-serif; background: #0f0f0f; color: #fff;
+               display: flex; align-items: center; justify-content: center; height: 100vh; }}
+        .card {{ background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px;
+                 padding: 2rem; width: 100%; max-width: 420px; text-align: center; }}
+        h1 {{ font-size: 1.35rem; margin-bottom: 1.25rem; color: #e5e5e5; }}
+        .btn {{ display: inline-block; padding: 0.65rem 1rem; background: #4f46e5; border: none;
+                border-radius: 8px; color: #fff; font-size: 0.95rem; text-decoration: none; }}
+        .btn:hover {{ background: #4338ca; }}
+      </style>
+    </head>
+    <body>
+      <div class="card">
         <h1>Welcome, {email}</h1>
-        <a href=\"/admin-panel/auth/logout\">Logout</a>
+        <a class="btn" href="/admin-panel/auth/logout">Logout</a>
+      </div>
+    </body>
+    </html>
     """
