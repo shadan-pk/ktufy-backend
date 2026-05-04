@@ -5,10 +5,33 @@ Enforces syllabus-faithful extraction with atomic concepts and canonical naming
 import json
 import re
 import logging
+import time
+import threading
 from typing import Optional, List, Dict, Any
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class RateLimiter:
+    """Simple per-process rate limiter (requests per minute)."""
+
+    def __init__(self, rpm: int) -> None:
+        self._interval = 60.0 / rpm if rpm and rpm > 0 else 0.0
+        self._next_allowed = 0.0
+        self._lock = threading.Lock()
+
+    def wait(self) -> None:
+        if self._interval <= 0:
+            return
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                if now >= self._next_allowed:
+                    self._next_allowed = now + self._interval
+                    return
+                sleep_for = self._next_allowed - now
+            time.sleep(min(sleep_for, 1.0))
 
 
 def to_canonical_id(text: str, prefix: str = "") -> str:
@@ -77,6 +100,7 @@ class LLMExtractorV2:
     
     def __init__(self):
         self.openai_client = None
+        self.rate_limiter = RateLimiter(settings.llm_rate_limit_rpm)
         self._initialize_clients()
     
     def _initialize_clients(self):
@@ -490,6 +514,7 @@ Recommended Textbooks and References:
         """Call LLM with the prompt"""
         if self.openai_client:
             try:
+                self.rate_limiter.wait()
                 response = self.openai_client.chat.completions.create(
                     model=model or "gpt-4o-mini",
                     messages=[
