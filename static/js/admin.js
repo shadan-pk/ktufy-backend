@@ -322,9 +322,9 @@ async function refreshStats() {
         document.getElementById('stat-modules').textContent =
             data.knowledge_graph?.total_modules || 0;
         document.getElementById('stat-topics').textContent =
-            data.knowledge_graph?.total_concepts ?? data.knowledge_graph?.total_topics ?? 0;
+            (data.knowledge_graph && (data.knowledge_graph.total_concepts || data.knowledge_graph.total_topics)) || 0;
         document.getElementById('stat-embeddings').textContent =
-            data.embeddings?.total_chunks ?? data.embeddings?.total_embeddings ?? 0;
+            (data.embeddings && (data.embeddings.total_chunks || data.embeddings.total_embeddings)) || 0;
 
         const branches = data.knowledge_graph?.branches || [];
         document.getElementById('branches-list').innerHTML = branches.length > 0

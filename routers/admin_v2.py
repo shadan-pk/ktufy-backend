@@ -143,6 +143,12 @@ async def get_statistics():
     
     return {
         "version": "2.0",
+        "total_subjects": kg_stats.get("total_subjects", 0),
+        "total_modules": kg_stats.get("total_modules", 0),
+        "total_concepts": kg_stats.get("total_concepts", 0),
+        "total_topics": kg_stats.get("total_concepts", 0),
+        "total_embeddings": emb_stats.get("total_embeddings", 0),
+        "total_chunks": emb_stats.get("total_embeddings", 0),
         "knowledge_graph": {
             "total_subjects": kg_stats.get("total_subjects", 0),
             "total_modules": kg_stats.get("total_modules", 0),
@@ -664,20 +670,23 @@ async def search_syllabus(query: SearchQueryV2):
     return results
 
 
+@router.get("/graph/search", summary="Search concepts (V2 Alias)")
 @router.get("/search/concepts", summary="Search concepts in knowledge graph (V2)")
-async def search_concepts(q: str, limit: int = 10):
+async def search_concepts(query: str = Query(..., alias="query"), q: Optional[str] = None, limit: int = 10):
     """
     Search atomic concepts by name or keywords in the knowledge graph
     """
     if not neo4j_service.is_connected():
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     
-    concepts = neo4j_service.search_concepts(q, limit)
+    search_term = query or q
+    concepts = neo4j_service.search_concepts(search_term, limit)
     
     return {
-        "query": q,
+        "query": search_term,
         "results": concepts,
-        "total": len(concepts)
+        "total": len(concepts),
+        "nodes": concepts # Compat for graph view if needed
     }
 
 
