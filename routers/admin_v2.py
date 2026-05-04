@@ -615,59 +615,65 @@ async def get_relationship_types():
 async def search_syllabus(query: SearchQueryV2):
     """
     Search the syllabus using V2 pipeline with intelligent routing
-    
-    The query router will determine the optimal search strategy:
-    - KG_ONLY: For structural queries (prerequisites, hierarchy)
-    - VECTOR_ONLY: For content/explanation queries
-    - HYBRID: For complex queries needing both
     """
     import time
+    import traceback
     start_time = time.time()
     
-    # Route the query
-    query_type, route_metadata = query_router.route(query.query)
-    chunk_types_for_search = query_router.get_vector_chunk_types(query.query)
-    extracted_entities = route_metadata.get("extracted_entities", [])
-    
-    results = {
-        "query": query.query,
-        "routing": {
-            "type": query_type.value,
-            "chunk_types": chunk_types_for_search,
-            "entities": extracted_entities
-        },
-        "kg_results": [],
-        "vector_results": [],
-        "version": "2.0"
-    }
-    
-    # Execute based on routing
-    if query_type.value in ["kg_only", "kg_then_vector", "hybrid"]:
-        # Search Knowledge Graph
-        if neo4j_service.is_connected():
-            entity_values = [e.get("value", "") for e in extracted_entities if isinstance(e.get("value"), str)]
-            search_term = entity_values[0] if entity_values else query.query
-            kg_results = neo4j_service.search_concepts(search_term, limit=query.limit)
-            results["kg_results"] = kg_results
-    
-    if query_type.value in ["vector_only", "vector_then_kg", "hybrid"]:
-        # Search Vector Store
-        if embedding_service.is_ready():
-            vector_results = embedding_service.search(
-                supabase_client=supabase_admin_client,
-                query=query.query,
-                limit=query.limit,
-                semester=query.semester,
-                branch=query.branch,
-                subject_code=query.subject_code,
-                chunk_types=query.chunk_types or chunk_types_for_search
-            )
-            results["vector_results"] = vector_results
-    
-    results["search_time_ms"] = (time.time() - start_time) * 1000
-    results["total_results"] = len(results["kg_results"]) + len(results["vector_results"])
-    
-    return results
+    try:
+        # Route the query
+        query_type, route_metadata = query_router.route(query.query)
+        chunk_types_for_search = query_router.get_vector_chunk_types(query.query)
+        extracted_entities = route_metadata.get("extracted_entities", [])
+        
+        results = {
+            "query": query.query,
+            "routing": {
+                "type": query_type.value,
+                "chunk_types": chunk_types_for_search,
+                "entities": extracted_entities
+            },
+            "kg_results": [],
+            "vector_results": [],
+            "version": "2.0"
+        }
+        
+        # Execute based on routing
+        if query_type.value in ["kg_only", "kg_then_vector", "hybrid"]:
+            # Search Knowledge Graph
+            if neo4j_service.is_connected():
+                entity_values = [e.get("value", "") for e in extracted_entities if isinstance(e.get("value"), str)]
+                search_term = entity_values[0] if entity_values else query.query
+                kg_results = neo4j_service.search_concepts(search_term, limit=query.limit)
+                results["kg_results"] = kg_results
+        
+        if query_type.value in ["vector_only", "vector_then_kg", "hybrid"]:
+            # Search Vector Store
+            if embedding_service.is_ready():
+                vector_results = embedding_service.search(
+                    supabase_client=supabase_admin_client,
+                    query=query.query,
+                    limit=query.limit,
+                    semester=query.semester,
+                    branch=query.branch,
+                    subject_code=query.subject_code,
+                    chunk_types=query.chunk_types or chunk_types_for_search
+                )
+                results["vector_results"] = vector_results
+            else:
+                logger.warning("Embedding service not ready for search")
+        
+        results["search_time_ms"] = (time.time() - start_time) * 1000
+        results["total_results"] = len(results["kg_results"]) + len(results["vector_results"])
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Search failed: {e}\n{traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Search failed: {str(e)}"
+        )
 
 
 @router.get("/graph/search", summary="Search concepts (V2 Alias)")

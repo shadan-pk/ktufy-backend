@@ -471,7 +471,7 @@ class Neo4jServiceV2:
         
         # Try full-text search first
         cypher = """
-        CALL db.index.fulltext.queryNodes('concept_search', $query) 
+        CALL db.index.fulltext.queryNodes('concept_search', $q) 
         YIELD node, score
         MATCH (m:Module)-[:CONTAINS]->(node)
         MATCH (s:Subject)-[:HAS_MODULE]->(m)
@@ -482,7 +482,7 @@ class Neo4jServiceV2:
         
         try:
             with self.driver.session() as session:
-                result = session.run(cypher, query=f"*{query}*", limit=limit)
+                result = session.run(cypher, q=f"*{query}*", limit=limit)
                 concepts = []
                 for record in result:
                     concept = dict(record["c"])
@@ -499,8 +499,8 @@ class Neo4jServiceV2:
         """Fallback search using CONTAINS"""
         cypher = """
         MATCH (c:Concept)
-        WHERE toLower(c.name) CONTAINS toLower($query)
-           OR toLower(c.display_name) CONTAINS toLower($query)
+        WHERE toLower(c.name) CONTAINS toLower($q)
+           OR toLower(c.display_name) CONTAINS toLower($q)
         MATCH (m:Module)-[:CONTAINS]->(c)
         MATCH (s:Subject)-[:HAS_MODULE]->(m)
         RETURN c, m, s
@@ -508,7 +508,7 @@ class Neo4jServiceV2:
         """
         
         with self.driver.session() as session:
-            result = session.run(cypher, query=query, limit=limit)
+            result = session.run(cypher, q=query, limit=limit)
             concepts = []
             for record in result:
                 concept = dict(record["c"])

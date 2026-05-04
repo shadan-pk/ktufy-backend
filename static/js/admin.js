@@ -909,6 +909,11 @@ function initSearchForm() {
                 })
             });
 
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+                throw new Error(errorData.detail || 'Search request failed');
+            }
+
             const data = await response.json();
 
             if (data.total_results === 0) {
