@@ -27,6 +27,7 @@ from app.admin.router import router as admin_panel_router
 
 # Import auth dependencies for the users route alias
 from app.auth import get_current_user, AuthenticatedUser
+from app.admin.dependencies import require_admin
 from schemas.user import MessageResponse
 from utils.supabase_client import supabase_admin_client
 
@@ -66,7 +67,7 @@ app.add_middleware(
 
 # Admin Dashboard Route
 @app.get("/admin", response_class=HTMLResponse, include_in_schema=False)
-async def admin_dashboard():
+async def admin_dashboard(admin_user: dict = Depends(require_admin)):
     """
     Serve the Admin Dashboard HTML page
     """
