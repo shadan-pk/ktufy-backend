@@ -6,6 +6,8 @@ services:
     container_name: ktufy-backend
     env_file: .env
     environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
       - HF_HOME=/app/.cache/hf
       - TRANSFORMERS_CACHE=/app/.cache/hf
       - SENTENCE_TRANSFORMERS_HOME=/app/.cache/hf
