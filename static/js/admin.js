@@ -322,9 +322,9 @@ async function refreshStats() {
         document.getElementById('stat-modules').textContent =
             data.knowledge_graph?.total_modules || 0;
         document.getElementById('stat-topics').textContent =
-            data.knowledge_graph?.total_topics || 0;
+            data.knowledge_graph?.total_concepts ?? data.knowledge_graph?.total_topics ?? 0;
         document.getElementById('stat-embeddings').textContent =
-            data.embeddings?.total_embeddings || 0;
+            data.embeddings?.total_chunks ?? data.embeddings?.total_embeddings ?? 0;
 
         const branches = data.knowledge_graph?.branches || [];
         document.getElementById('branches-list').innerHTML = branches.length > 0
@@ -769,8 +769,8 @@ async function showSubjectDetails(code, regulation = '2019') {
                         <span class="text-xs text-muted">${m.hours || 0} hours</span>
                     </div>
                     <div class="card-body compact">
-                        ${m.topics && m.topics.length > 0
-                            ? `<ul style="margin:0;padding-left:1.25rem;list-style:disc">${m.topics.map(t => `
+                        ${(() => { const items = m.topics || m.concepts || []; return items.length > 0
+                            ? `<ul style="margin:0;padding-left:1.25rem;list-style:disc">${items.map(t => `
                                 <li style="margin-bottom:0.375rem">
                                     <strong>${t.name}</strong>
                                     ${t.description ? `<br><span class="text-sm text-muted">${t.description}</span>` : ''}
@@ -779,8 +779,7 @@ async function showSubjectDetails(code, regulation = '2019') {
                                         : ''}
                                 </li>
                             `).join('')}</ul>`
-                            : '<p class="text-sm text-muted">No topics added</p>'
-                        }
+                            : '<p class="text-sm text-muted">No topics added</p>'; })()}
                     </div>
                 </div>
             `).join('');

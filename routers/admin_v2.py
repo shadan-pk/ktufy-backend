@@ -172,7 +172,7 @@ async def upload_syllabus(
     file: UploadFile = File(..., description="Syllabus PDF file"),
     semester: int = Form(..., ge=1, le=8, description="Semester number"),
     branch: str = Form(..., description="Branch code (CSE, ECE, etc.)"),
-    regulation: str = Form(default="2019", description="KTU regulation year (2019, 2023, 2027)")
+    regulation: str = Form(default="2019", description="KTU regulation year (2019, 2024, 2028)")
 ):
     """
     Upload a KTU syllabus PDF for V2 processing
@@ -188,7 +188,7 @@ async def upload_syllabus(
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
     
     # Validate regulation
-    valid_regulations = ["2019", "2023", "2027"]
+    valid_regulations = ["2019", "2024", "2028"]
     if regulation not in valid_regulations:
         raise HTTPException(
             status_code=400, 
