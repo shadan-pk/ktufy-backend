@@ -560,11 +560,39 @@ async function pollJobProgress(jobId) {
     animFrameId = requestAnimationFrame(animate);
 
     // Poll the API separately
+    let consecutiveErrors = 0;
+    const MAX_ERRORS = 5;
+
     const poll = async () => {
         if (completing || isFailed) return;
 
         try {
             const response = await fetch(`${API_BASE_V2}/jobs/${jobId}`);
+
+            // Stop immediately on 404 — job was lost or never created
+            if (response.status === 404) {
+                isFailed = true;
+                cancelAnimationFrame(animFrameId);
+                showToast('Job not found. The server may have restarted. Please try uploading again.', 'danger');
+                document.getElementById('upload-progress').style.display = 'none';
+                return;
+            }
+
+            // Stop on repeated server errors
+            if (!response.ok) {
+                consecutiveErrors++;
+                if (consecutiveErrors >= MAX_ERRORS) {
+                    isFailed = true;
+                    cancelAnimationFrame(animFrameId);
+                    showToast(`Server error (${response.status}). Processing may have failed.`, 'danger');
+                    document.getElementById('upload-progress').style.display = 'none';
+                    return;
+                }
+                setTimeout(poll, 2000);
+                return;
+            }
+
+            consecutiveErrors = 0; // reset on success
             const data = await response.json();
 
             realProgress = data.progress || 0;
@@ -587,6 +615,14 @@ async function pollJobProgress(jobId) {
             setTimeout(poll, 500);
         } catch (error) {
             console.error('Polling error:', error);
+            consecutiveErrors++;
+            if (consecutiveErrors >= MAX_ERRORS) {
+                isFailed = true;
+                cancelAnimationFrame(animFrameId);
+                showToast('Lost connection to server. Please refresh and check job status.', 'danger');
+                document.getElementById('upload-progress').style.display = 'none';
+                return;
+            }
             setTimeout(poll, 1500);
         }
     };

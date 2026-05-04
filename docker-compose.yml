@@ -11,6 +11,7 @@ services:
       - TRANSFORMERS_CACHE=/app/.cache/hf
       - SENTENCE_TRANSFORMERS_HOME=/app/.cache/hf
       - NEO4J_URI=bolt://neo4j:7687
+      - REDIS_URL=redis://redis:6379/0
     expose:
       - "8000"
     volumes:
@@ -19,12 +20,36 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
+      redis:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  worker:
+    build: .
+    container_name: ktufy-worker
+    env_file: .env
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - HF_HOME=/app/.cache/hf
+      - TRANSFORMERS_CACHE=/app/.cache/hf
+      - SENTENCE_TRANSFORMERS_HOME=/app/.cache/hf
+      - NEO4J_URI=bolt://neo4j:7687
+      - REDIS_URL=redis://redis:6379/0
+    command: ["python", "-m", "services.processing_worker"]
+    volumes:
+      - uploads_data:/app/uploads
+      - vector_data:/app/vector_store
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
