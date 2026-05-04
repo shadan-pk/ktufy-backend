@@ -5,7 +5,7 @@ Run this after starting the server to test the chatbot functionality
 Prerequisites:
 1. Start the backend server: python start.ps1
 2. Have a valid user token from Supabase authentication
-3. Set GEMINI_API_KEY in .env file
+3. Set GROQ_API_KEY in .env file
 
 Usage:
     python test_chat.py

@@ -16,7 +16,7 @@ This guide covers implementing a chatbot system for KTUfy with chat sessions, me
 
 ### **Phase 2: AI Model Integration**
 1. Choose deployment approach (Local vs Cloud)
-2. Integrate LLM (Ollama, Gemini, or Colab)
+2. Integrate LLM (Ollama, Groq, or Colab)
 3. Streaming responses
 4. Context management
 
@@ -65,16 +65,16 @@ This guide covers implementing a chatbot system for KTUfy with chat sessions, me
 
 ---
 
-### **Option 3: Cloud API (Gemini/OpenAI)** 🚀 BEST FOR PRODUCTION
+### **Option 3: Cloud API (Groq/OpenAI)** 🚀 BEST FOR PRODUCTION
 **Pros:**
-- ✅ Extremely fast (Gemini)
+- ✅ Extremely fast (Groq)
 - ✅ No infrastructure needed
 - ✅ Always available
 - ✅ Scalable
 - ✅ Latest models
 
 **Cons:**
-- ❌ API costs (but Gemini has free quota)
+- ❌ API costs (but Groq has free tier)
 - ❌ Requires internet
 - ❌ Data sent to third party
 
@@ -85,7 +85,7 @@ This guide covers implementing a chatbot system for KTUfy with chat sessions, me
 ### **Option 4: Hybrid Approach** 🎯 SMARTEST
 **Use Case Based:**
 - **Development/Testing:** Ollama locally
-- **Production:** Gemini API (free quota)
+- **Production:** Groq API (free tier: 14,400 requests/day)
 - **Fallback:** Switch between local and API based on availability
 
 **This is what we'll implement!**
@@ -188,7 +188,7 @@ Add to `requirements.txt`:
 ```txt
 # AI/ML Models
 ollama>=0.1.0              # Local LLM (Ollama)
-google-generativeai>=0.7.2 # Cloud LLM (Gemini API)
+groq>=0.4.0                # Cloud LLM (Groq API)
 langchain>=0.1.0           # LLM framework
 langchain-community>=0.0.10
 
@@ -302,21 +302,20 @@ Create `services/chat_service.py`:
 import os
 from typing import Optional, AsyncGenerator
 import httpx
-import google.generativeai as genai
+from groq import Groq
 
 class ChatService:
     def __init__(self):
-        # Try Gemini API first (free quota)
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        self.use_gemini = self.gemini_api_key is not None
+        # Try Groq API first (free tier)
+        self.groq_api_key = os.getenv("GROQ_API_KEY")
+        self.use_groq = self.groq_api_key is not None
         
         # Fallback to Ollama (local)
         self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         
-        if self.use_gemini:
-            genai.configure(api_key=self.gemini_api_key)
-            self.model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")  # Best cost/perf
-            self.client = genai.GenerativeModel(self.model)
+        if self.use_groq:
+            self.client = Groq(api_key=self.groq_api_key)
+            self.model = "llama-3.1-8b-instant"  # Fast and free
         else:
             self.model = "llama3"
     
@@ -332,33 +331,37 @@ class ChatService:
             messages: List of message dicts with 'role' and 'content'
             stream: Whether to stream the response
         """
-        if self.use_gemini:
-            return await self._generate_gemini(messages, stream)
+        if self.use_groq:
+            return await self._generate_groq(messages, stream)
         else:
             return await self._generate_ollama(messages, stream)
     
-    async def _generate_gemini(self, messages: list[dict], stream: bool):
-        """Generate using Gemini API"""
+    async def _generate_groq(self, messages: list[dict], stream: bool):
+        """Generate using Groq API"""
         if stream:
-            return self._stream_gemini(messages)
+            return self._stream_groq(messages)
         else:
-            response = self.client.generate_content(
-                " ".join([m["content"] for m in messages if m.get("role") == "user"]),
-                generation_config={"temperature": 0.7, "max_output_tokens": 1024}
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1024
             )
-            return response.text
+            return response.choices[0].message.content
     
-    async def _stream_gemini(self, messages: list[dict]):
-        """Stream response from Gemini"""
-        stream = self.client.generate_content(
-            " ".join([m["content"] for m in messages if m.get("role") == "user"]),
-            generation_config={"temperature": 0.7, "max_output_tokens": 1024},
+    async def _stream_groq(self, messages: list[dict]):
+        """Stream response from Groq"""
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1024,
             stream=True
         )
         
         for chunk in stream:
-            if chunk.text:
-                yield chunk.text
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
     
     async def _generate_ollama(self, messages: list[dict], stream: bool):
         """Generate using local Ollama"""
@@ -607,23 +610,23 @@ async def delete_session(
 
 ## 🚀 Setup Instructions
 
-### **Option A: Using Gemini API (Recommended for Start)**
+### **Option A: Using Groq API (Recommended for Start)**
 
 1. **Get Free API Key:**
    ```
-Visit: https://aistudio.google.com/app/apikey
-Sign up → Create API key
-Free quota available
+   Visit: https://console.groq.com
+   Sign up → Get API Key
+   Free tier: 14,400 requests/day
    ```
 
 2. **Add to .env:**
    ```env
-GEMINI_API_KEY=your_api_key_here
+   GROQ_API_KEY=gsk_your_api_key_here
    ```
 
 3. **Install:**
    ```bash
-pip install google-generativeai
+   pip install groq
    ```
 
 ### **Option B: Using Ollama (Local)**
@@ -681,16 +684,16 @@ DELETE /api/v1/chat/sessions/{id}         - Delete session
 
 **For Your Use Case:**
 
-1. **Start with Gemini API:**
-    - Free quota is generous
-    - Extremely fast responses
-    - No infrastructure needed
-    - Easy to implement
+1. **Start with Groq API:**
+   - Free tier is generous
+   - Extremely fast responses
+   - No infrastructure needed
+   - Easy to implement
 
 2. **Later Add Ollama:**
-    - For offline capability
-    - As fallback when Gemini quota reached
-    - For testing without API costs
+   - For offline capability
+   - As fallback when Groq quota reached
+   - For testing without API costs
 
 3. **Avoid Google Colab:**
    - Not suitable for production
@@ -699,7 +702,7 @@ DELETE /api/v1/chat/sessions/{id}         - Delete session
 
 **Architecture:**
 ```
-Frontend → Backend API → Gemini API (primary)
+Frontend → Backend API → Groq API (primary)
                       ↘ Ollama (fallback/offline)
 ```
 

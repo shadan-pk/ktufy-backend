@@ -5,7 +5,6 @@ Enforces syllabus-faithful extraction with atomic concepts and canonical naming
 import json
 import re
 import logging
-import os
 from typing import Optional, List, Dict, Any
 from app.config import settings
 
@@ -77,24 +76,23 @@ class LLMExtractorV2:
     """
     
     def __init__(self):
-        self.gemini_client = None
+        self.groq_client = None
         self.openai_client = None
         self._initialize_clients()
     
     def _initialize_clients(self):
         """Initialize LLM clients"""
         try:
-            import google.generativeai as genai
+            from groq import Groq
             import os
-            api_key = os.getenv("GEMINI_API_KEY")
+            api_key = os.getenv("GROQ_API_KEY")
             if api_key:
-                genai.configure(api_key=api_key)
-                self.gemini_client = genai
-                logger.info("Gemini client initialized")
+                self.groq_client = Groq(api_key=api_key)
+                logger.info("Groq client initialized")
         except ImportError:
-            logger.warning("Gemini SDK not installed")
+            logger.warning("Groq not installed")
         except Exception as e:
-            logger.warning(f"Could not initialize Gemini: {e}")
+            logger.warning(f"Could not initialize Groq: {e}")
         
         try:
             from openai import OpenAI
@@ -501,27 +499,23 @@ Recommended Textbooks and References:
     
     def _call_llm(self, prompt: str, model: Optional[str] = None) -> str:
         """Call LLM with the prompt"""
-        if self.gemini_client:
+        if self.groq_client:
             try:
-                model_name = model or os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-                client = self.gemini_client.GenerativeModel(
-                    model_name,
-                    system_instruction=(
-                        "You are a precise academic data extraction assistant. "
-                        "Extract information EXACTLY as written in source documents. "
-                        "Always return valid JSON."
-                    )
+                response = self.groq_client.chat.completions.create(
+                    model=model or "llama-3.3-70b-versatile",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a precise academic data extraction assistant. Extract information EXACTLY as written in source documents. Always return valid JSON."
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.05,  # Lower temperature for more precise extraction
+                    max_tokens=8000
                 )
-                response = client.generate_content(
-                    [{"role": "user", "parts": [prompt]}],
-                    generation_config={
-                        "temperature": 0.05,
-                        "max_output_tokens": 8000
-                    }
-                )
-                return response.text or ""
+                return response.choices[0].message.content
             except Exception as e:
-                logger.error(f"Gemini API error: {e}")
+                logger.error(f"Groq API error: {e}")
                 if not self.openai_client:
                     raise
         

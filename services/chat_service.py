@@ -1,13 +1,13 @@
 """
 Chat Service
 Handles AI model interaction for chatbot functionality with KG-RAG integration
-Supports both Gemini API (cloud) and Ollama (local)
+Supports both Groq API (cloud) and Ollama (local)
 """
 import os
 import logging
 from typing import Optional, AsyncGenerator, Union, List, Dict, Any
 import httpx
-import google.generativeai as genai
+from groq import Groq
 
 from services.query_router import query_router, QueryType
 from services.neo4j_service_v2 import neo4j_service
@@ -20,25 +20,24 @@ logger = logging.getLogger(__name__)
 class ChatService:
     """
     Service for handling chat completions with AI models
-    Supports hybrid approach: Gemini API (primary) and Ollama (fallback)
+    Supports hybrid approach: Groq API (primary) and Ollama (fallback)
     """
     
     def __init__(self):
         """Initialize chat service with available AI providers"""
-        # Try Gemini API first (low-cost, production-ready)
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        self.use_gemini = self.gemini_api_key is not None
+        # Try Groq API first (free tier: 14,400 requests/day)
+        self.groq_api_key = os.getenv("GROQ_API_KEY")
+        self.use_groq = self.groq_api_key is not None
         
         # Fallback to Ollama (local)
         self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         
-        if self.use_gemini:
-            genai.configure(api_key=self.gemini_api_key)
-            self.model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-            self.client = genai.GenerativeModel(self.model)
-            print(f"✅ Chat service initialized with Gemini API (model: {self.model})")
+        if self.use_groq:
+            self.client = Groq(api_key=self.groq_api_key)
+            self.model = "llama-3.1-8b-instant"  # Fast and free on Groq
+            print(f"✅ Chat service initialized with Groq API (model: {self.model})")
         else:
-            self.model = os.getenv("OLLAMA_MODEL", "llama3")
+            self.model = "llama3"
             print(f"✅ Chat service initialized with Ollama (model: {self.model})")
     
     # ═══════════════════════════════════════════════════════════════════════════
@@ -315,75 +314,52 @@ class ChatService:
         Returns:
             String response or async generator for streaming
         """
-        if self.use_gemini:
-            return await self._generate_gemini(messages, stream)
+        if self.use_groq:
+            return await self._generate_groq(messages, stream)
         else:
             return await self._generate_ollama(messages, stream)
     
-    async def _generate_gemini(
+    async def _generate_groq(
         self, 
         messages: list[dict], 
         stream: bool
     ) -> Union[str, AsyncGenerator[str, None]]:
-        """Generate response using Gemini API"""
+        """Generate response using Groq API"""
         if stream:
-            return self._stream_gemini(messages)
+            return self._stream_groq(messages)
         else:
             try:
-                system_prompt, content = self._build_gemini_content(messages)
-                client = genai.GenerativeModel(self.model, system_instruction=system_prompt)
-                response = client.generate_content(
-                    content,
-                    generation_config={
-                        "temperature": 0.7,
-                        "max_output_tokens": 1024,
-                        "top_p": 1.0
-                    }
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=1024,
+                    top_p=1,
+                    stream=False
                 )
-                return response.text or ""
+                return response.choices[0].message.content
             except Exception as e:
-                print(f"❌ Gemini API error: {str(e)}")
+                print(f"❌ Groq API error: {str(e)}")
                 raise Exception(f"Failed to generate response: {str(e)}")
     
-    async def _stream_gemini(self, messages: list[dict]) -> AsyncGenerator[str, None]:
-        """Stream response from Gemini API"""
+    async def _stream_groq(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+        """Stream response from Groq API"""
         try:
-            system_prompt, content = self._build_gemini_content(messages)
-            client = genai.GenerativeModel(self.model, system_instruction=system_prompt)
-            stream = client.generate_content(
-                content,
-                generation_config={
-                    "temperature": 0.7,
-                    "max_output_tokens": 1024,
-                    "top_p": 1.0
-                },
+            stream = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1024,
+                top_p=1,
                 stream=True
             )
             
             for chunk in stream:
-                if chunk.text:
-                    yield chunk.text
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
         except Exception as e:
-            print(f"❌ Gemini streaming error: {str(e)}")
+            print(f"❌ Groq streaming error: {str(e)}")
             yield f"Error: {str(e)}"
-
-    def _build_gemini_content(self, messages: list[dict]) -> tuple[str, list[dict]]:
-        """Convert chat messages into Gemini content format."""
-        system_prompt = ""
-        content: list[dict] = []
-
-        for message in messages:
-            role = message.get("role")
-            text = message.get("content", "")
-            if role == "system":
-                system_prompt = text
-                continue
-            if role == "assistant":
-                content.append({"role": "model", "parts": [text]})
-            else:
-                content.append({"role": "user", "parts": [text]})
-
-        return system_prompt, content
     
     async def _generate_ollama(
         self, 
@@ -513,9 +489,9 @@ Use the above context to answer the student's question accurately. Base your res
             Dictionary with provider details
         """
         return {
-            "provider": "gemini" if self.use_gemini else "ollama",
+            "provider": "groq" if self.use_groq else "ollama",
             "model": self.model,
-            "base_url": self.ollama_base_url if not self.use_gemini else "https://generativelanguage.googleapis.com"
+            "base_url": self.ollama_base_url if not self.use_groq else "https://api.groq.com"
         }
 
 

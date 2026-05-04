@@ -80,7 +80,7 @@ class SyllabusProcessorV2:
         """Get overall system status"""
         return {
             "pdf_processor": pdf_processor.pdfplumber is not None,
-            "llm_extractor": llm_extractor.gemini_client is not None or llm_extractor.openai_client is not None,
+            "llm_extractor": llm_extractor.groq_client is not None or llm_extractor.openai_client is not None,
             "neo4j": neo4j_service.is_connected(),
             "embedding_model": embedding_service.is_ready(),
             "active_jobs": len([j for j in self.jobs.values() if j.status == "processing"]),

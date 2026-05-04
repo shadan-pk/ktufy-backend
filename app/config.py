@@ -54,8 +54,7 @@ class Settings(BaseSettings):
     )
     
     # LLM Configuration
-    gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
-    gemini_model: Optional[str] = Field(default="gemini-1.5-flash", alias="GEMINI_MODEL")
+    groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
     ollama_base_url: Optional[str] = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
     ollama_model: Optional[str] = Field(default="llama3.2", alias="OLLAMA_MODEL")
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")

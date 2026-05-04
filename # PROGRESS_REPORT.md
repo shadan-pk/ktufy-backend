@@ -24,12 +24,12 @@
 - Full chat session CRUD (create, list, get, update, delete)
 - KG-RAG context retrieval with intelligent query routing
 - Conversation history support
-- Dual LLM provider: **Gemini** (primary, `gemini-1.5-flash`) / **Ollama** (fallback, `llama3`)
+- Dual LLM provider: **Groq** (primary, `llama-3.1-8b-instant`) / **Ollama** (fallback, `llama3`)
 - Streaming support in service layer
 
 ### KG-RAG Pipeline — V1
 - PDF upload → text extraction (pdfplumber)
-- LLM-based structured syllabus extraction (Gemini `gemini-1.5-flash` / OpenAI `gpt-4o-mini`)
+- LLM-based structured syllabus extraction (Groq `llama-3.3-70b-versatile` / OpenAI `gpt-4o-mini`)
 - Knowledge Graph population: `Subject → HAS_MODULE → Module → CONTAINS → Topic`
 - pgvector embedding storage via Supabase (`syllabus_embeddings` table)
 - Background job tracking with `FastAPI BackgroundTasks`
@@ -95,7 +95,7 @@
 |---------|--------|---------|
 | **Supabase** (Auth + DB + Storage) | ✅ Connected | Anon + service-role clients |
 | **Neo4j** (Knowledge Graph) | ✅ Connected | Dual V1/V2 services |
-| **Gemini API** (LLM — Primary) | ✅ Connected | Chat: `gemini-1.5-flash`, Extraction: `gemini-1.5-flash` |
+| **Groq API** (LLM — Primary) | ✅ Connected | Chat: `llama-3.1-8b-instant`, Extraction: `llama-3.3-70b-versatile` |
 | **Ollama** (LLM — Fallback) | ✅ Connected | Local `llama3` |
 | **OpenAI** (LLM — Fallback) | ✅ Connected | `gpt-4o-mini` |
 | **sentence-transformers** (Embeddings) | ✅ Connected | `BAAI/bge-base-en-v1.5` |
