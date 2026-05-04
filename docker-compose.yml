@@ -54,11 +54,11 @@ services:
       - neo4j_data:/data
     restart: unless-stopped
     healthcheck:
-        test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
-        interval: 30s
-        timeout: 10s
-        retries: 5
-        start_period: 60s
+      test: ["CMD-SHELL", "curl -f http://localhost:7474 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   redis:
     image: redis:7-alpine
