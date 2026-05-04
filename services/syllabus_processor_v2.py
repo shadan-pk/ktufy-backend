@@ -13,6 +13,7 @@ from services.llm_extractor_v2 import llm_extractor
 from services.neo4j_service_v2 import neo4j_service
 from services.embedding_service_v2 import embedding_service
 from services.syllabus_db_service import syllabus_db_service
+from services.chat_service import chat_service
 
 logger = logging.getLogger(__name__)
 
@@ -78,13 +79,16 @@ class SyllabusProcessorV2:
     
     def get_status(self) -> dict:
         """Get overall system status"""
-        llm_ready = (
-            getattr(llm_extractor, "groq_client", None) is not None
-            or getattr(llm_extractor, "openai_client", None) is not None
-        )
+        # Check LLM Extractor (for syllabus processing)
+        llm_extractor_ready = getattr(llm_extractor, "openai_client", None) is not None
+        
+        # Check Chat Service (for chatbot)
+        chat_ready = chat_service.use_openai or (chat_service.ollama_base_url is not None)
+        
         return {
             "pdf_processor": pdf_processor.pdfplumber is not None,
-            "llm_extractor": llm_ready,
+            "llm_extractor": llm_extractor_ready,
+            "chat_service": chat_ready,
             "neo4j": neo4j_service.is_connected(),
             "embedding_model": embedding_service.is_ready(),
             "active_jobs": len([j for j in self.jobs.values() if j.status == "processing"]),

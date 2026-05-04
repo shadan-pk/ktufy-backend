@@ -124,7 +124,8 @@ async def get_system_status():
         "status": "operational" if all([
             status["neo4j"],
             status["llm_extractor"],
-            status["embedding_model"]
+            status["embedding_model"],
+            status.get("chat_service", True)
         ]) else "partial",
         "components": status,
         "timestamp": datetime.utcnow().isoformat()

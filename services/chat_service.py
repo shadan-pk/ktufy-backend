@@ -83,68 +83,80 @@ class ChatService:
                 context["has_context"] = False
                 return context
             
-            # Fetch from Knowledge Graph
-            if query_type in [QueryType.KG_ONLY, QueryType.KG_THEN_VECTOR, QueryType.HYBRID]:
-                neo4j_connected = neo4j_service.is_connected()
-                print(f"   📍 Neo4j connected: {neo4j_connected}")
-                if neo4j_connected:
-                    try:
-                        # Search for relevant concepts
-                        kg_results = neo4j_service.search_concepts(query, limit=5)
-                        print(f"   📍 KG search returned: {len(kg_results)} results")
-                        
-                        # For each concept, get additional context
-                        for concept in kg_results[:3]:
-                            concept_id = concept.get("canonical_id")
-                            concept_type = concept.get("type", "Topic")
+            # Prepare tasks for parallel execution
+            tasks = []
+            
+            # KG Search Task
+            async def fetch_kg():
+                if query_type in [QueryType.KG_ONLY, QueryType.KG_THEN_VECTOR, QueryType.HYBRID]:
+                    neo4j_connected = neo4j_service.is_connected()
+                    if neo4j_connected:
+                        try:
+                            # Search for relevant concepts
+                            kg_results = neo4j_service.search_concepts(query, limit=5)
+                            print(f"   📍 KG search returned: {len(kg_results)} results")
                             
-                            if concept_id:
-                                # Get prerequisites based on concept type
-                                if concept_type == "Topic":
-                                    prereqs = neo4j_service.get_topic_prerequisites(concept_id)
-                                elif concept_type == "Subject":
-                                    prereqs = neo4j_service.get_prerequisites(concept_id)
-                                else:
-                                    prereqs = []
-                                concept["prerequisites"] = prereqs[:3] if prereqs else []
+                            # For each concept, get additional context
+                            for concept in kg_results[:3]:
+                                concept_id = concept.get("id") or concept.get("canonical_id")
+                                concept_type = concept.get("type", "Topic")
                                 
-                                # Get related concepts
-                                relationships = neo4j_service.get_concept_relationships(concept_id)
-                                concept["relationships"] = relationships[:5] if relationships else []
-                        
-                        context["kg_results"] = kg_results
-                    except Exception as kg_error:
-                        print(f"   ❌ KG search error: {kg_error}")
-                else:
-                    print("   ⚠️ Neo4j not connected, skipping KG search")
+                                if concept_id:
+                                    # Fix: Use correct method names for Neo4jServiceV2
+                                    try:
+                                        prereqs = neo4j_service.get_prerequisites(concept_id)
+                                        concept["prerequisites"] = prereqs[:3] if prereqs else []
+                                    except Exception as e:
+                                        print(f"   ⚠️ Error fetching prereqs for {concept_id}: {e}")
+                                    
+                                    try:
+                                        # Fix: Use get_related_concepts instead of non-existent get_concept_relationships
+                                        related = neo4j_service.get_related_concepts(concept_id)
+                                        concept["relationships"] = related[:5] if related else []
+                                    except Exception as e:
+                                        print(f"   ⚠️ Error fetching relationships for {concept_id}: {e}")
+                            
+                            return kg_results
+                        except Exception as kg_error:
+                            print(f"   ❌ KG search error: {kg_error}")
+                    else:
+                        print("   ⚠️ Neo4j not connected, skipping KG search")
+                return []
+
+            # Vector Search Task
+            async def fetch_vector():
+                should_try_vector = query_type in [QueryType.VECTOR_ONLY, QueryType.VECTOR_THEN_KG, QueryType.HYBRID, QueryType.KG_THEN_VECTOR]
+                if should_try_vector:
+                    embedding_ready = embedding_service.is_ready()
+                    supabase_ready = supabase_admin_client is not None
+                    if embedding_ready and supabase_ready:
+                        try:
+                            vector_results = embedding_service.search_similar(
+                                supabase_client=supabase_admin_client,
+                                query=query,
+                                limit=5,
+                                semester=semester,
+                                branch=branch,
+                                subject_code=subject_code
+                            )
+                            print(f"   📍 Vector search returned: {len(vector_results) if vector_results else 0} results")
+                            return vector_results
+                        except Exception as vec_error:
+                            print(f"   ❌ Vector search error: {vec_error}")
+                    else:
+                        print("   ⚠️ Embedding/Supabase not ready, skipping vector search")
+                return []
+
+            # Run searches in parallel
+            import asyncio
+            kg_results, vector_results = await asyncio.gather(fetch_kg(), fetch_vector())
             
-            # Fetch from Vector Store (also try vector if KG returned nothing)
-            should_try_vector = query_type in [QueryType.VECTOR_ONLY, QueryType.VECTOR_THEN_KG, QueryType.HYBRID, QueryType.KG_THEN_VECTOR]
-            if should_try_vector:
-                embedding_ready = embedding_service.is_ready()
-                supabase_ready = supabase_admin_client is not None
-                print(f"   📍 Embedding ready: {embedding_ready}, Supabase ready: {supabase_ready}")
-                if embedding_ready and supabase_ready:
-                    try:
-                        vector_results = embedding_service.search_similar(
-                            supabase_client=supabase_admin_client,
-                            query=query,
-                            limit=5,
-                            semester=semester,
-                            branch=branch,
-                            subject_code=subject_code
-                        )
-                        print(f"   📍 Vector search returned: {len(vector_results) if vector_results else 0} results")
-                        context["vector_results"] = vector_results
-                    except Exception as vec_error:
-                        print(f"   ❌ Vector search error: {vec_error}")
-                else:
-                    print("   ⚠️ Embedding/Supabase not ready, skipping vector search")
-            
-            context["has_context"] = bool(context["kg_results"] or context["vector_results"])
+            context["kg_results"] = kg_results
+            context["vector_results"] = vector_results
+            context["has_context"] = bool(kg_results or vector_results)
             
         except Exception as e:
-            logger.error(f"Error fetching RAG context: {e}")
+            logger.error(f"Error fetching RAG context: {e}", exc_info=True)
         
         return context
     
