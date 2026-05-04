@@ -5,7 +5,7 @@ Orchestrates the corrected pipeline
 import os
 import uuid
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
 from datetime import datetime
 
 from services.pdf_processor import pdf_processor
@@ -113,7 +113,8 @@ class SyllabusProcessorV2:
         branch: str,
         regulation: str = "2019",
         job: Optional[ProcessingJob] = None,
-        supabase_client=None
+        supabase_client=None,
+        job_update_fn: Optional[Callable[[ProcessingJob], None]] = None
     ) -> dict:
         """
         Process a syllabus PDF using the corrected V2 pipeline
@@ -128,12 +129,20 @@ class SyllabusProcessorV2:
             "errors": []
         }
         
+        def sync_job() -> None:
+            if job and job_update_fn:
+                try:
+                    job_update_fn(job)
+                except Exception as exc:
+                    logger.warning("Failed to sync job status: %s", exc)
+
         try:
             if job:
                 job.status = "processing"
                 job.started_at = datetime.utcnow()
                 job.progress = 5
                 job.message = "Extracting text from PDF..."
+                sync_job()
             
             # ═══════════════════════════════════════════════════════════════
             # Step 1: Extract text from PDF
@@ -152,6 +161,7 @@ class SyllabusProcessorV2:
             if job:
                 job.progress = 15
                 job.message = "Text extracted. Parsing syllabus structure..."
+                sync_job()
             
             # ═══════════════════════════════════════════════════════════════
             # Step 2: Extract structured data with V2 extractor
@@ -182,6 +192,7 @@ class SyllabusProcessorV2:
                 job.total_subjects = subjects_count
                 job.progress = 35
                 job.message = f"Found {subjects_count} subjects, {concepts_count} concepts. Storing to database..."
+                sync_job()
             
             # ═══════════════════════════════════════════════════════════════
             # Step 2.5: Store structured syllabus to Supabase (for display)
@@ -209,6 +220,7 @@ class SyllabusProcessorV2:
             if job:
                 job.progress = 40
                 job.message = f"Stored to DB. Building knowledge graph..."
+                sync_job()
             
             # ═══════════════════════════════════════════════════════════════
             # Step 3: Load into Neo4j Knowledge Graph (V2)
@@ -233,6 +245,7 @@ class SyllabusProcessorV2:
                     job.relationships_created = kg_stats["relationships_created"]
                     job.progress = 70
                     job.message = f"KG built: {kg_stats['concepts_created']} concepts, {kg_stats['relationships_created']} relationships. Storing embeddings..."
+                    sync_job()
             else:
                 result["knowledge_graph"] = {"status": "skipped", "reason": "Neo4j not connected"}
                 result["errors"].append("Neo4j not connected")
@@ -262,6 +275,7 @@ class SyllabusProcessorV2:
                     job.chunks_stored = emb_stats["chunks_stored"]
                     job.progress = 95
                     job.message = f"Stored {emb_stats['chunks_stored']} content chunks. Finalizing..."
+                    sync_job()
             else:
                 reason = []
                 if not supabase_client:
@@ -282,6 +296,7 @@ class SyllabusProcessorV2:
                 job.message = "Processing completed successfully!"
                 job.completed_at = datetime.utcnow()
                 job.result = result
+                sync_job()
             
             logger.info("Syllabus processing V2 completed successfully")
             
@@ -295,6 +310,7 @@ class SyllabusProcessorV2:
                 job.error = error_msg
                 job.message = f"Processing failed: {error_msg}"
                 job.completed_at = datetime.utcnow()
+                sync_job()
         
         return result
     

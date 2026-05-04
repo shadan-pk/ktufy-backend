@@ -16,6 +16,16 @@ from services.neo4j_service_v2 import neo4j_service
 from services.embedding_service_v2 import embedding_service
 from services.query_router import query_router
 from utils.supabase_client import supabase_admin_client
+from services.queue import get_queue
+from services.processing_worker import process_syllabus_job
+from services.processing_jobs import (
+    create_uploaded_file,
+    create_processing_job,
+    get_processing_job,
+    list_processing_jobs,
+    format_jobs_response,
+    update_processing_job,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -197,23 +207,61 @@ async def upload_syllabus(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
     
-    # Create processing job
-    job = syllabus_processor.create_job(safe_filename, semester, branch, regulation)
-    
-    # Process in background
-    background_tasks.add_task(
-        process_syllabus_background_v2,
-        file_path, semester, branch, job.job_id, regulation
+    if not supabase_admin_client:
+        raise HTTPException(status_code=500, detail="Supabase admin client not configured")
+
+    file_size = os.path.getsize(file_path)
+    file_row = create_uploaded_file(
+        supabase_admin_client,
+        filename=safe_filename,
+        original_filename=file.filename,
+        file_size=file_size,
+        semester=semester,
+        branch=branch,
+        regulation=regulation,
     )
-    
+
+    if not file_row:
+        raise HTTPException(status_code=500, detail="Failed to record uploaded file")
+
+    job_row = create_processing_job(
+        supabase_admin_client,
+        file_id=file_row.get("id"),
+        status="pending",
+        progress=0,
+        message="Queued for processing",
+    )
+
+    if not job_row:
+        raise HTTPException(status_code=500, detail="Failed to create processing job")
+
+    queue = get_queue()
+    queue.enqueue(
+        process_syllabus_job,
+        job_row["id"],
+        file_path,
+        semester,
+        branch,
+        regulation,
+        file_row.get("id"),
+        job_timeout=1800,
+    )
+
+    update_processing_job(
+        supabase_admin_client,
+        job_row["id"],
+        status="queued",
+        message="Queued for processing",
+    )
+
     return SyllabusUploadResponseV2(
-        id=job.job_id,
+        id=job_row["id"],
         filename=safe_filename,
         semester=semester,
         branch=branch,
         regulation=regulation,
-        status=job.status,
-        message="File uploaded. V2 processing started in background.",
+        status="queued",
+        message="File uploaded. Processing queued.",
         created_at=datetime.utcnow()
     )
 
@@ -243,11 +291,12 @@ async def list_jobs():
     """
     Get a list of all V2 processing jobs
     """
-    return {
-        "jobs": syllabus_processor.get_all_jobs(),
-        "total": len(syllabus_processor.jobs),
-        "version": "2.0"
-    }
+    if not supabase_admin_client:
+        raise HTTPException(status_code=500, detail="Supabase admin client not configured")
+
+    jobs = list_processing_jobs(supabase_admin_client)
+    formatted = format_jobs_response(supabase_admin_client, jobs)
+    return {"jobs": formatted, "total": len(formatted), "version": "2.0"}
 
 
 @router.get("/jobs/{job_id}", response_model=ProcessingJobResponseV2, summary="Get job status (V2)")
@@ -255,22 +304,26 @@ async def get_job_status(job_id: str):
     """
     Get the status of a specific V2 processing job
     """
-    job = syllabus_processor.get_job(job_id)
+    if not supabase_admin_client:
+        raise HTTPException(status_code=500, detail="Supabase admin client not configured")
+
+    job = get_processing_job(supabase_admin_client, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
+    formatted = format_jobs_response(supabase_admin_client, [job])[0]
     return ProcessingJobResponseV2(
-        job_id=job.job_id,
-        status=job.status,
-        progress=job.progress,
-        message=job.message,
-        subjects_processed=job.subjects_processed,
-        total_subjects=job.total_subjects,
-        concepts_created=job.concepts_created,
-        chunks_stored=job.chunks_stored,
-        relationships_created=job.relationships_created,
-        started_at=job.started_at,
-        completed_at=job.completed_at
+        job_id=formatted.get("job_id"),
+        status=formatted.get("status"),
+        progress=formatted.get("progress", 0),
+        message=formatted.get("message", ""),
+        subjects_processed=formatted.get("subjects_processed", 0),
+        total_subjects=formatted.get("total_subjects", 0),
+        concepts_created=formatted.get("concepts_created", 0),
+        chunks_stored=formatted.get("chunks_stored", 0),
+        relationships_created=formatted.get("relationships_created", 0),
+        started_at=formatted.get("started_at"),
+        completed_at=formatted.get("completed_at"),
     )
 
 

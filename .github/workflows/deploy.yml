@@ -34,7 +34,7 @@ jobs:
           command_timeout: 20m
           script: |
             set -e
-            cd /home/ktufy2026/ktufy/ktufy-backend
+            cd /home/azureuser/ktufy-backend
 
             echo "→ Pulling latest code..."
             git config pull.rebase false

@@ -28,6 +28,8 @@ email-validator==2.1.0
 # Utilities
 python-dateutil==2.8.2
 requests==2.31.0  # For testing endpoints
+redis==5.0.4
+rq==1.16.2
 
 # AI/ML Models
 groq>=0.4.0                # Cloud LLM (Groq API)
