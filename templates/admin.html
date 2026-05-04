@@ -163,11 +163,14 @@
         .flex-col { flex-direction: column; }
         .items-center { align-items: center; }
         .items-start { align-items: flex-start; }
+        .items-end { align-items: flex-end; }
         .justify-between { justify-content: space-between; }
+        .justify-center { justify-content: center; }
         .gap-sm { gap: 0.5rem; }
         .gap-xs { gap: 0.25rem; }
         .w-full { width: 100%; }
         .text-center { text-align: center; }
+        .mb-0 { margin-bottom: 0; }
 
         /* ═══════════════════════════════════════════════════════════════════
            Buttons
@@ -243,10 +246,11 @@
         }
 
         .custom-select-trigger:hover { border-color: var(--muted-foreground); }
-        .custom-select-trigger:focus,
+        .custom-select-trigger:focus-within,
         .custom-select.open .custom-select-trigger {
             border-color: var(--ring);
-            box-shadow: 0 0 0 2px hsla(240, 4.9%, 83.9%, 0.15);
+            background: var(--accent);
+            box-shadow: 0 0 0 1px var(--ring);
         }
 
         .custom-select-trigger .trigger-text { flex: 1; text-align: left; }
@@ -258,6 +262,12 @@
             flex-shrink: 0;
         }
         .custom-select.open .chevron { transform: rotate(180deg); }
+
+        /* Custom select size variants */
+        .custom-select-lg .custom-select-trigger {
+            padding: 0.625rem 1rem;
+            font-size: 1rem;
+        }
 
         .custom-select-dropdown {
             display: none;
@@ -723,29 +733,56 @@
                 <div class="card mb-md">
                     <div class="card-body">
                         <form id="search-form">
-                            <div class="grid-4 gap-md mb-md" style="grid-template-columns:1fr auto auto auto">
-                                <div><input type="text" class="form-input form-input-lg" id="search-query" placeholder="Enter your search query..." required></div>
-                                <div class="custom-select" data-id="search-limit">
-                                    <select id="search-limit">
-                                        <option value="5">5 results</option><option value="10">10 results</option><option value="20">20 results</option>
-                                    </select>
+                            <div class="flex flex-col gap-md">
+                                <div class="grid gap-md" style="grid-template-columns: 1fr auto;">
+                                    <div class="search-input-wrap">
+                                        <i data-lucide="search" class="search-icon"></i>
+                                        <input type="text" class="form-input form-input-lg" id="search-query" placeholder="Enter your search query (e.g. 'What is a B-tree?')" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-lg"><i data-lucide="sparkles"></i> Search RAG</button>
                                 </div>
-                                <div><button type="submit" class="btn btn-primary btn-lg"><i data-lucide="search"></i> Search</button></div>
-                            </div>
-                            <div class="grid-3 gap-md">
-                                <div class="custom-select" data-id="search-branch">
-                                    <select id="search-branch"><option value="">All Branches</option><option value="CSE">CSE</option><option value="ECE">ECE</option></select>
+
+                                <div class="grid-4 gap-md items-end">
+                                    <div class="form-group mb-0">
+                                        <label class="form-label">Branch</label>
+                                        <div class="custom-select" data-id="search-branch">
+                                            <select id="search-branch">
+                                                <option value="">All Branches</option>
+                                                <option value="CSE">CSE</option>
+                                                <option value="ECE">ECE</option>
+                                                <option value="EEE">EEE</option>
+                                                <option value="ME">ME</option>
+                                                <option value="CE">CE</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group mb-0">
+                                        <label class="form-label">Semester</label>
+                                        <div class="custom-select" data-id="search-semester">
+                                            <select id="search-semester">
+                                                <option value="">All Semesters</option>
+                                                <option value="1">S1</option><option value="2">S2</option>
+                                                <option value="3">S3</option><option value="4">S4</option>
+                                                <option value="5">S5</option><option value="6">S6</option>
+                                                <option value="7">S7</option><option value="8">S8</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group mb-0">
+                                        <label class="form-label">Subject Code</label>
+                                        <input type="text" class="form-input" id="search-subject-code" placeholder="e.g. CS201">
+                                    </div>
+                                    <div class="form-group mb-0">
+                                        <label class="form-label">Limit</label>
+                                        <div class="custom-select" data-id="search-limit">
+                                            <select id="search-limit">
+                                                <option value="5">5 Results</option>
+                                                <option value="10" selected>10 Results</option>
+                                                <option value="20">20 Results</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="custom-select" data-id="search-semester">
-                                    <select id="search-semester">
-                                        <option value="">All Semesters</option>
-                                        <option value="1">Semester 1</option><option value="2">Semester 2</option>
-                                        <option value="3">Semester 3</option><option value="4">Semester 4</option>
-                                        <option value="5">Semester 5</option><option value="6">Semester 6</option>
-                                        <option value="7">Semester 7</option><option value="8">Semester 8</option>
-                                    </select>
-                                </div>
-                                <div><input type="text" class="form-input" id="search-subject-code" placeholder="Subject Code (optional)"></div>
                             </div>
                         </form>
                     </div>

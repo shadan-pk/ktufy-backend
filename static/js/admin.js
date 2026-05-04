@@ -911,39 +911,77 @@ function initSearchForm() {
 
             const data = await response.json();
 
-            if (data.results.length === 0) {
+            if (data.total_results === 0) {
                 document.getElementById('search-results').innerHTML =
-                    '<div class="text-center text-muted" style="padding:2rem"><p>No results found</p></div>';
+                    '<div class="text-center text-muted" style="padding:2rem"><p>No results found in the syllabus knowledge base.</p></div>';
                 return;
             }
 
-            document.getElementById('search-results').innerHTML = `
+            let html = `
                 <div class="flex items-center justify-between mb-sm">
-                    <span class="text-sm text-muted">${data.total_results} results found in ${data.search_time_ms.toFixed(0)}ms</span>
+                    <span class="text-sm text-muted">Found ${data.total_results} matches in ${data.search_time_ms.toFixed(0)}ms (Route: ${data.routing.type})</span>
                 </div>
-                ${data.results.map((r, i) => `
-                    <div class="card" style="margin-bottom:0.75rem">
-                        <div class="card-body compact">
-                            <div class="flex items-start justify-between" style="margin-bottom:0.5rem">
-                                <div>
-                                    <span class="badge badge-info" style="margin-right:0.5rem">${r.subject_code}</span>
-                                    <span class="text-sm text-muted">${r.subject_name}</span>
-                                </div>
-                                <span class="badge badge-success">${(r.similarity_score * 100).toFixed(1)}% match</span>
-                            </div>
-                            <p style="font-size:0.875rem;margin-bottom:0.375rem">${r.content}</p>
-                            <span class="text-xs text-muted">
-                                ${r.module_name ? `Module: ${r.module_name}` : ''}
-                                ${r.topic_name ? `| Topic: ${r.topic_name}` : ''}
-                            </span>
-                        </div>
-                    </div>
-                `).join('')}
             `;
 
+            // KG Results
+            if (data.kg_results && data.kg_results.length > 0) {
+                html += `
+                    <div class="mb-sm">
+                        <h6 class="text-xs uppercase tracking-wider text-muted-foreground mb-sm">Knowledge Graph Concepts</h6>
+                        <div class="grid-2 gap-sm">
+                            ${data.kg_results.map(c => `
+                                <div class="card" style="border-left: 3px solid #f59e0b">
+                                    <div class="card-body compact">
+                                        <div class="flex items-center justify-between">
+                                            <span class="font-medium text-sm">${escapeHtml(c.name || c.id)}</span>
+                                            <span class="badge badge-info">${c.subject_code || 'Syllabus'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Vector Results
+            if (data.vector_results && data.vector_results.length > 0) {
+                html += `
+                    <h6 class="text-xs uppercase tracking-wider text-muted-foreground mb-sm">Semantic Content Chunks</h6>
+                    ${data.vector_results.map(r => `
+                        <div class="card" style="margin-bottom:0.75rem; border-left: 3px solid #6366f1">
+                            <div class="card-body compact">
+                                <div class="flex items-start justify-between" style="margin-bottom:0.5rem">
+                                    <div>
+                                        <span class="badge badge-outline" style="margin-right:0.5rem">${r.subject_code}</span>
+                                        <span class="text-sm font-medium">${r.subject_name || ''}</span>
+                                    </div>
+                                    <span class="badge ${r.similarity > 0.8 ? 'badge-success' : 'badge-default'}">
+                                        ${(r.similarity * 100).toFixed(1)}% match
+                                    </span>
+                                </div>
+                                <p style="font-size:0.875rem; color: var(--foreground); line-height: 1.5; margin-bottom: 0.5rem">
+                                    ${escapeHtml(r.content)}
+                                </p>
+                                <div class="flex items-center gap-sm">
+                                    <span class="text-xs text-muted-foreground">Type: ${r.chunk_type || 'content'}</span>
+                                    <span class="text-xs text-muted-foreground">|</span>
+                                    <span class="text-xs text-muted-foreground">Branch: ${r.branch}</span>
+                                    <span class="text-xs text-muted-foreground">|</span>
+                                    <span class="text-xs text-muted-foreground">Sem: S${r.semester}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
+            }
+
+            document.getElementById('search-results').innerHTML = html;
+
         } catch (error) {
+            console.error('Search error:', error);
             document.getElementById('search-results').innerHTML =
-                `<div class="alert alert-danger">Search failed: ${error.message}</div>`;
+                `<div class="card" style="border: 1px solid var(--destructive)"><div class="card-body text-destructive">Search failed: ${error.message}</div></div>`;
         }
     });
 }
