@@ -44,6 +44,10 @@ services:
     environment:
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-changeme}
       - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_server_memory_heap_initial__size=512m   
+      - NEO4J_server_memory_heap_max__size=1G         
+      - NEO4J_server_memory_pagecache__size=512m      
+    mem_limit: 2g                                     
     ports:
       - "7474:7474"
       - "7687:7687"
