@@ -42,16 +42,29 @@ jobs:
             git reset --hard origin/v3.0_test
 
             echo "→ Rebuilding containers..."
-            docker compose up -d --build
+            # build first without stopping
+            docker compose build
+
+            echo "→ Restarting services (Clean)..."
+            # down/up ensures Nginx re-resolves the backend IP and clean state
+            docker compose down
+            docker compose up -d
 
             echo "→ Cleaning old images..."
             docker image prune -f
 
-            echo "→ Status..."
-            docker compose ps
+            echo "→ Waiting for backend to be healthy (ML models loading)..."
+            # Wait up to 2 minutes for model loading
+            for i in {1..24}; do
+              if curl -s --fail http://localhost/health > /dev/null; then
+                echo "✅ Backend is UP and Healthy!"
+                docker compose ps
+                exit 0
+              fi
+              echo "...waiting for healthy backend ($((i*5))s)..."
+              sleep 5
+            done
 
-            echo "→ Health check..."
-            sleep 15
-            curl --fail http://localhost/health \
-              && echo "✅ Deploy successful!" \
-              || echo "⚠️ Check logs"
+            echo "❌ Backend failed to start or health check failed."
+            docker compose logs backend --tail 50
+            exit 1
