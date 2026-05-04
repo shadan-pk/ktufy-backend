@@ -105,32 +105,6 @@ async def admin_logout() -> RedirectResponse:
     return response
 
 
-@router.get("/dashboard", response_class=HTMLResponse)
-async def admin_dashboard(admin_user: dict = Depends(require_admin)) -> str:
-    email = admin_user.get("email", "")
-    return f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8" />
-      <title>Admin Dashboard - KTUfy</title>
-      <style>
-        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{ font-family: system-ui, sans-serif; background: #0f0f0f; color: #fff;
-               display: flex; align-items: center; justify-content: center; height: 100vh; }}
-        .card {{ background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px;
-                 padding: 2rem; width: 100%; max-width: 420px; text-align: center; }}
-        h1 {{ font-size: 1.35rem; margin-bottom: 1.25rem; color: #e5e5e5; }}
-        .btn {{ display: inline-block; padding: 0.65rem 1rem; background: #4f46e5; border: none;
-                border-radius: 8px; color: #fff; font-size: 0.95rem; text-decoration: none; }}
-        .btn:hover {{ background: #4338ca; }}
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <h1>Welcome, {email}</h1>
-        <a class="btn" href="/admin-panel/auth/logout">Logout</a>
-      </div>
-    </body>
-    </html>
-    """
+@router.get("/dashboard")
+async def admin_dashboard(admin_user: dict = Depends(require_admin)) -> RedirectResponse:
+    return RedirectResponse(url="/admin", status_code=302)

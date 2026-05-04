@@ -2,10 +2,10 @@
 KTUfy Backend API
 Main application entry point
 """
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from dotenv import load_dotenv
 import os
 
@@ -36,8 +36,9 @@ app = FastAPI(
     title=os.getenv("APP_NAME", "KTUfy Backend API"),
     version=os.getenv("APP_VERSION", "1.0.0"),
     description="AI-powered study assistant for KTU students",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None
 )
 
 # Mount static files
@@ -63,6 +64,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def admin_docs_guard(request: Request, call_next):
+    if request.url.path in {"/docs", "/redoc", "/openapi.json"}:
+        try:
+            await require_admin(request)
+        except HTTPException as exc:
+            location = (exc.headers or {}).get("Location")
+            if exc.status_code == 307 and location:
+                return RedirectResponse(url=location, status_code=307)
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    return await call_next(request)
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def admin_openapi(admin_user: dict = Depends(require_admin)):
+    return app.openapi()
+
+
+@app.get("/docs", include_in_schema=False)
+async def admin_docs(admin_user: dict = Depends(require_admin)):
+    from fastapi.openapi.docs import get_swagger_ui_html
+    return get_swagger_ui_html(openapi_url="/openapi.json", title=app.title)
+
+
+@app.get("/redoc", include_in_schema=False)
+async def admin_redoc(admin_user: dict = Depends(require_admin)):
+    from fastapi.openapi.docs import get_redoc_html
+    return get_redoc_html(openapi_url="/openapi.json", title=app.title)
 
 
 # Admin Dashboard Route
