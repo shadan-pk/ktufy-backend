@@ -133,7 +133,7 @@
         /* ═══════════════════════════════════════════════════════════════════
            Card Component
            ═══════════════════════════════════════════════════════════════════ */
-        .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
         .card-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
         .card-header h5 { font-size: 1rem; font-weight: 600; }
         .card-body { padding: 1.5rem; }
@@ -225,6 +225,7 @@
             position: relative;
             width: 100%;
         }
+        .custom-select.open { z-index: 100; }
 
         .custom-select-trigger {
             display: flex;

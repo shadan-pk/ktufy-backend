@@ -66,17 +66,7 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def admin_docs_guard(request: Request, call_next):
-    if request.url.path in {"/docs", "/redoc", "/openapi.json"}:
-        try:
-            await require_admin(request)
-        except HTTPException as exc:
-            location = (exc.headers or {}).get("Location")
-            if exc.status_code == 307 and location:
-                return RedirectResponse(url=location, status_code=307)
-            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
-    return await call_next(request)
+
 
 
 @app.get("/openapi.json", include_in_schema=False)
