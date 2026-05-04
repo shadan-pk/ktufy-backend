@@ -371,10 +371,13 @@ async def get_subject(subject_code: str, regulation: str = "2019"):
     
     # Get modules with concepts
     modules = neo4j_service.get_modules(subject_code, regulation)
-    subject["modules"] = modules
-    
+    # V2 returns concepts; rename to topics for frontend compatibility
+    for m in modules:
+        if "concepts" in m:
+            m["topics"] = m.pop("concepts")
+    subject["modules"] = modules    
     # Count concepts
-    total_concepts = sum(len(m.get("concepts", [])) for m in modules)
+    total_concepts = sum(len(m.get("topics", [])) for m in modules)
     subject["total_concepts"] = total_concepts
     
     return subject
@@ -416,13 +419,17 @@ async def get_subject_modules(subject_code: str, regulation: str = "2019"):
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     
     modules = neo4j_service.get_modules(subject_code, regulation)
-    
+    # V2 returns concepts; rename to topics for frontend compatibility
+    for m in modules:
+        if "concepts" in m:
+            m["topics"] = m.pop("concepts")
+
     return {
         "subject_code": subject_code,
         "regulation": regulation,
         "modules": modules,
         "total_modules": len(modules),
-        "total_concepts": sum(len(m.get("concepts", [])) for m in modules)
+        "total_concepts": sum(len(m.get("topics", [])) for m in modules)
     }
 
 
