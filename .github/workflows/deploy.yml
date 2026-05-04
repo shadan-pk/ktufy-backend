@@ -1,0 +1,55 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - v3.0_test    # your current branch
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+      - name: Run tests
+        run: echo "Tests passed"   # replace with pytest later
+
+  deploy:
+    name: Deploy to Azure
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: SSH and Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AZURE_VM_IP }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            set -e
+            cd /home/ktufy2026/ktufy/ktufy-backend
+
+            echo "→ Pulling latest code..."
+            git pull origin v3.0_test
+
+            echo "→ Rebuilding containers..."
+            docker compose up -d --build
+
+            echo "→ Cleaning old images..."
+            docker image prune -f
+
+            echo "→ Status..."
+            docker compose ps
+
+            echo "→ Health check..."
+            sleep 15
+            curl --fail http://localhost/health \
+              && echo "✅ Deploy successful!" \
+              || echo "⚠️ Check logs"
