@@ -1,7 +1,9 @@
 // KTUfy Admin Dashboard JavaScript — Shadcn-inspired UI
 // All API endpoints remain unchanged from previous version.
 
-const API_BASE = '/api/v1/admin';
+const API_BASE_V1 = '/api/v1/admin';
+const API_BASE_V2 = '/api/v2/admin';
+const API_BASE = API_BASE_V1; // legacy base for graph.js
 
 let activeUsersIntervalId = null;
 
@@ -241,7 +243,7 @@ async function loadActiveUsers() {
     if (!listEl || !metaEl) return;
 
     try {
-        const response = await fetch(`${API_BASE}/active-users?window_minutes=10`);
+        const response = await fetch(`${API_BASE_V1}/active-users?window_minutes=10`);
         const data = await response.json();
 
         const users = data.users || [];
@@ -293,7 +295,7 @@ function escapeHtml(value) {
 
 async function loadSystemStatus() {
     try {
-        const response = await fetch(`${API_BASE}/status`);
+        const response = await fetch(`${API_BASE_V2}/status`);
         const data = await response.json();
 
         const components = data.components;
@@ -312,7 +314,7 @@ async function loadSystemStatus() {
 
 async function refreshStats() {
     try {
-        const response = await fetch(`${API_BASE}/stats`);
+        const response = await fetch(`${API_BASE_V2}/stats`);
         const data = await response.json();
 
         document.getElementById('stat-subjects').textContent =
@@ -422,7 +424,7 @@ function initUploadForm() {
         uploadBtn.disabled = true;
 
         try {
-            const response = await fetch(`${API_BASE}/upload`, {
+            const response = await fetch(`${API_BASE_V2}/upload`, {
                 method: 'POST',
                 body: formData
             });
@@ -562,7 +564,7 @@ async function pollJobProgress(jobId) {
         if (completing || isFailed) return;
 
         try {
-            const response = await fetch(`${API_BASE}/jobs/${jobId}`);
+            const response = await fetch(`${API_BASE_V2}/jobs/${jobId}`);
             const data = await response.json();
 
             realProgress = data.progress || 0;
@@ -595,7 +597,7 @@ async function pollJobProgress(jobId) {
 
 async function loadUploadedFiles() {
     try {
-        const response = await fetch(`${API_BASE}/files`);
+        const response = await fetch(`${API_BASE_V1}/files`);
         const data = await response.json();
 
         const tbody = document.getElementById('files-table');
@@ -631,7 +633,7 @@ async function deleteFile(filename) {
     if (!confirm(`Delete file "${filename}"?`)) return;
 
     try {
-        const response = await fetch(`${API_BASE}/files/${filename}`, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE_V1}/files/${filename}`, { method: 'DELETE' });
         if (response.ok) {
             showToast('File deleted', 'success');
             loadUploadedFiles();
@@ -655,7 +657,7 @@ async function loadSubjects() {
         const semester = document.getElementById('filter-semester').value;
         const regulation = document.getElementById('filter-regulation').value;
 
-        let url = `${API_BASE}/subjects?`;
+        let url = `${API_BASE_V2}/subjects?`;
         if (branch) url += `branch=${branch}&`;
         if (semester) url += `semester=${semester}&`;
         if (regulation) url += `regulation=${regulation}`;
@@ -719,7 +721,7 @@ async function showSubjectDetails(code, regulation = '2019') {
     document.getElementById('subject-detail-content').innerHTML = '<div class="text-center" style="padding:2rem"><div class="spinner spinner-lg"></div></div>';
 
     try {
-        const response = await fetch(`${API_BASE}/subjects/${code}?regulation=${regulation}`);
+        const response = await fetch(`${API_BASE_V2}/subjects/${code}?regulation=${regulation}`);
         const subject = await response.json();
 
         let modulesHtml = '';
@@ -800,7 +802,7 @@ async function addSubject() {
     };
 
     try {
-        const response = await fetch(`${API_BASE}/subjects`, {
+        const response = await fetch(`${API_BASE_V1}/subjects`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(subject)
@@ -825,7 +827,7 @@ async function deleteSubject(code, regulation = '2019') {
     if (!confirm(`Delete subject "${code}" (${regulation} scheme) and all its modules/topics?`)) return;
 
     try {
-        const response = await fetch(`${API_BASE}/subjects/${code}?regulation=${regulation}`, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE_V2}/subjects/${code}?regulation=${regulation}`, { method: 'DELETE' });
         if (response.ok) {
             showToast('Subject deleted', 'success');
             closeModal('subjectDetailsModal');
@@ -860,7 +862,7 @@ function initSearchForm() {
             '<div class="text-center" style="padding:2rem"><div class="spinner spinner-lg"></div><p class="text-muted" style="margin-top:0.75rem">Searching...</p></div>';
 
         try {
-            const response = await fetch(`${API_BASE}/search`, {
+            const response = await fetch(`${API_BASE_V2}/search`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -917,7 +919,7 @@ function initSearchForm() {
 
 async function loadJobs() {
     try {
-        const response = await fetch(`${API_BASE}/jobs`);
+        const response = await fetch(`${API_BASE_V2}/jobs`);
         const data = await response.json();
 
         const tbody = document.getElementById('jobs-table');
@@ -968,7 +970,7 @@ function getStatusBadgeClass(status) {
 
 async function setupNeo4j() {
     try {
-        const response = await fetch(`${API_BASE}/neo4j/setup`, { method: 'POST' });
+        const response = await fetch(`${API_BASE_V2}/neo4j/setup`, { method: 'POST' });
         const data = await response.json();
 
         if (response.ok) {
@@ -997,7 +999,7 @@ async function confirmClearData() {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/data/clear?confirm=true`, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE_V2}/data/clear?confirm=true`, { method: 'DELETE' });
         if (response.ok) {
             showToast('All data cleared', 'warning');
             refreshStats();
