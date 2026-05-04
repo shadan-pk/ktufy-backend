@@ -6,7 +6,7 @@ services:
     container_name: ktufy-backend
     env_file: .env
     environment:
-      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - HF_HOME=/app/.cache/hf
       - TRANSFORMERS_CACHE=/app/.cache/hf
       - SENTENCE_TRANSFORMERS_HOME=/app/.cache/hf

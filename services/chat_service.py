@@ -7,7 +7,7 @@ import os
 import logging
 from typing import Optional, AsyncGenerator, Union, List, Dict, Any
 import httpx
-from groq import Groq
+from openai import AsyncOpenAI
 
 from services.query_router import query_router, QueryType
 from services.neo4j_service_v2 import neo4j_service
@@ -20,22 +20,22 @@ logger = logging.getLogger(__name__)
 class ChatService:
     """
     Service for handling chat completions with AI models
-    Supports hybrid approach: Groq API (primary) and Ollama (fallback)
+    Supports hybrid approach: OpenAI API (primary) and Ollama (fallback)
     """
     
     def __init__(self):
         """Initialize chat service with available AI providers"""
-        # Try Groq API first (free tier: 14,400 requests/day)
-        self.groq_api_key = os.getenv("GROQ_API_KEY")
-        self.use_groq = self.groq_api_key is not None
+        # Try OpenAI API first
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.use_openai = self.openai_api_key is not None
         
         # Fallback to Ollama (local)
         self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         
-        if self.use_groq:
-            self.client = Groq(api_key=self.groq_api_key)
-            self.model = "llama-3.1-8b-instant"  # Fast and free on Groq
-            print(f"✅ Chat service initialized with Groq API (model: {self.model})")
+        if self.use_openai:
+            self.client = AsyncOpenAI(api_key=self.openai_api_key)
+            self.model = "gpt-4o-mini"
+            print(f"✅ Chat service initialized with OpenAI API (model: {self.model})")
         else:
             self.model = "llama3"
             print(f"✅ Chat service initialized with Ollama (model: {self.model})")
@@ -314,22 +314,22 @@ class ChatService:
         Returns:
             String response or async generator for streaming
         """
-        if self.use_groq:
-            return await self._generate_groq(messages, stream)
+        if self.use_openai:
+            return await self._generate_openai(messages, stream)
         else:
             return await self._generate_ollama(messages, stream)
     
-    async def _generate_groq(
+    async def _generate_openai(
         self, 
         messages: list[dict], 
         stream: bool
     ) -> Union[str, AsyncGenerator[str, None]]:
-        """Generate response using Groq API"""
+        """Generate response using OpenAI API"""
         if stream:
-            return self._stream_groq(messages)
+            return self._stream_openai(messages)
         else:
             try:
-                response = self.client.chat.completions.create(
+                response = await self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     temperature=0.7,
@@ -339,13 +339,13 @@ class ChatService:
                 )
                 return response.choices[0].message.content
             except Exception as e:
-                print(f"❌ Groq API error: {str(e)}")
+                print(f"❌ OpenAI API error: {str(e)}")
                 raise Exception(f"Failed to generate response: {str(e)}")
     
-    async def _stream_groq(self, messages: list[dict]) -> AsyncGenerator[str, None]:
-        """Stream response from Groq API"""
+    async def _stream_openai(self, messages: list[dict]) -> AsyncGenerator[str, None]:
+        """Stream response from OpenAI API"""
         try:
-            stream = self.client.chat.completions.create(
+            stream = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.7,
@@ -354,11 +354,11 @@ class ChatService:
                 stream=True
             )
             
-            for chunk in stream:
+            async for chunk in stream:
                 if chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
         except Exception as e:
-            print(f"❌ Groq streaming error: {str(e)}")
+            print(f"❌ OpenAI streaming error: {str(e)}")
             yield f"Error: {str(e)}"
     
     async def _generate_ollama(
@@ -489,9 +489,9 @@ Use the above context to answer the student's question accurately. Base your res
             Dictionary with provider details
         """
         return {
-            "provider": "groq" if self.use_groq else "ollama",
+            "provider": "openai" if self.use_openai else "ollama",
             "model": self.model,
-            "base_url": self.ollama_base_url if not self.use_groq else "https://api.groq.com"
+            "base_url": self.ollama_base_url if not self.use_openai else "https://api.openai.com/v1"
         }
 
 

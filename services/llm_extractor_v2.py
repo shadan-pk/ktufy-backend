@@ -76,28 +76,17 @@ class LLMExtractorV2:
     """
     
     def __init__(self):
-        self.groq_client = None
         self.openai_client = None
         self._initialize_clients()
     
     def _initialize_clients(self):
         """Initialize LLM clients"""
         try:
-            from groq import Groq
-            import os
-            api_key = os.getenv("GROQ_API_KEY")
-            if api_key:
-                self.groq_client = Groq(api_key=api_key)
-                logger.info("Groq client initialized")
-        except ImportError:
-            logger.warning("Groq not installed")
-        except Exception as e:
-            logger.warning(f"Could not initialize Groq: {e}")
-        
-        try:
             from openai import OpenAI
-            if settings.openai_api_key:
-                self.openai_client = OpenAI(api_key=settings.openai_api_key)
+            import os
+            api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
+            if api_key:
+                self.openai_client = OpenAI(api_key=api_key)
                 logger.info("OpenAI client initialized")
         except ImportError:
             logger.warning("OpenAI not installed")
@@ -499,26 +488,6 @@ Recommended Textbooks and References:
     
     def _call_llm(self, prompt: str, model: Optional[str] = None) -> str:
         """Call LLM with the prompt"""
-        if self.groq_client:
-            try:
-                response = self.groq_client.chat.completions.create(
-                    model=model or "llama-3.3-70b-versatile",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a precise academic data extraction assistant. Extract information EXACTLY as written in source documents. Always return valid JSON."
-                        },
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.05,  # Lower temperature for more precise extraction
-                    max_tokens=8000
-                )
-                return response.choices[0].message.content
-            except Exception as e:
-                logger.error(f"Groq API error: {e}")
-                if not self.openai_client:
-                    raise
-        
         if self.openai_client:
             try:
                 response = self.openai_client.chat.completions.create(
