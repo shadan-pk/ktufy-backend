@@ -23,6 +23,7 @@ from routers import syllabus as syllabus_router
 from routers import learning as learning_router
 from routers import coding as coding_router
 from routers import media as media_router
+from routers import ticklist as ticklist_router
 from app.admin.router import router as admin_panel_router
 
 # Import auth dependencies for the users route alias
@@ -54,6 +55,7 @@ app.include_router(syllabus_router.router)
 app.include_router(learning_router.router)
 app.include_router(coding_router.router)
 app.include_router(media_router.router)
+app.include_router(ticklist_router.router)
 app.include_router(admin_panel_router)
 
 # Configure CORS

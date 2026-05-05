@@ -3,7 +3,9 @@ Chat Router
 Handles chat session and message endpoints
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List
+import asyncio
+import logging
+from typing import List, Dict
 from uuid import UUID
 
 from app.auth import get_current_user, AuthenticatedUser
@@ -19,11 +21,16 @@ from services.chat_service import chat_service
 from utils.supabase_client import supabase_admin_client
 from schemas.user import MessageResponse
 
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter(
     prefix="/api/v1/chat",
     tags=["Chat"]
 )
+
+# Track active chat tasks for cancellation
+active_chat_tasks: Dict[str, asyncio.Task] = {}
 
 
 @router.post("/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
@@ -181,6 +188,10 @@ async def send_message(
     Returns:
         ChatResponse: User message and AI assistant response
     """
+    user_id = current_user.user_id
+    task = asyncio.current_task()
+    active_chat_tasks[user_id] = task
+    
     try:
         # Create session if needed
         if not chat_request.session_id:
@@ -283,11 +294,36 @@ async def send_message(
         
     except HTTPException:
         raise
+    except asyncio.CancelledError:
+        logger.info(f"Chat generation cancelled for user {user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail="Generation cancelled by user"
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing message: {str(e)}"
         )
+    finally:
+        # Remove task from tracking if it's still there
+        if active_chat_tasks.get(user_id) == task:
+            del active_chat_tasks[user_id]
+
+
+@router.post("/stop", response_model=MessageResponse)
+async def stop_generation(
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Stop any ongoing AI generation for the current user
+    """
+    user_id = current_user.user_id
+    if user_id in active_chat_tasks:
+        active_chat_tasks[user_id].cancel()
+        return MessageResponse(message="Generation stopped", success=True)
+    
+    return MessageResponse(message="No active generation found", success=True)
 
 
 @router.put("/sessions/{session_id}", response_model=ChatSessionResponse)

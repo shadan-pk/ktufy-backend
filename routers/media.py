@@ -7,6 +7,7 @@ Audio:  convert, trim, merge, normalize
 Image:  convert, compress, resize
 PDF:    merge, split, compress, images-to-pdf, pdf-to-images
 """
+import asyncio
 import logging
 import os
 import shutil
@@ -434,7 +435,18 @@ async def pdf_merge(
 
     output_path = os.path.join(job_dir, "merged.pdf")
     try:
-        await pdf_service.merge_pdfs(input_paths, output_path)
+        # Add timeout protection (2 minutes for merge)
+        await asyncio.wait_for(
+            pdf_service.merge_pdfs(input_paths, output_path),
+            timeout=120.0
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"PDF merge timeout")
+        _cleanup(job_dir)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="PDF merge timeout.",
+        )
     except Exception as e:
         logger.error(f"PDF merge failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
@@ -456,7 +468,18 @@ async def pdf_split(
 
     await _save_upload(file, input_path, MAX_PDF_SIZE)
     try:
-        await pdf_service.split_pdf(input_path, output_path, ranges)
+        # Add timeout protection (2 minutes for split)
+        await asyncio.wait_for(
+            pdf_service.split_pdf(input_path, output_path, ranges),
+            timeout=120.0
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"PDF split timeout")
+        _cleanup(job_dir)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="PDF split timeout.",
+        )
     except Exception as e:
         logger.error(f"PDF split failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
@@ -482,7 +505,18 @@ async def pdf_compress(
 
     await _save_upload(file, input_path, MAX_PDF_SIZE)
     try:
-        await pdf_service.compress_pdf(input_path, output_path, quality)
+        # Add timeout protection (3 minutes for compress)
+        await asyncio.wait_for(
+            pdf_service.compress_pdf(input_path, output_path, quality),
+            timeout=180.0
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"PDF compress timeout")
+        _cleanup(job_dir)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="PDF compress timeout.",
+        )
     except Exception as e:
         logger.error(f"PDF compress failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
@@ -512,7 +546,18 @@ async def pdf_images_to_pdf(
 
     output_path = os.path.join(job_dir, "combined.pdf")
     try:
-        await pdf_service.images_to_pdf(input_paths, output_path)
+        # Add timeout protection (2 minutes for images-to-pdf)
+        await asyncio.wait_for(
+            pdf_service.images_to_pdf(input_paths, output_path),
+            timeout=120.0
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"Images to PDF timeout")
+        _cleanup(job_dir)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Images to PDF timeout.",
+        )
     except Exception as e:
         logger.error(f"Images to PDF failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)
@@ -540,7 +585,18 @@ async def pdf_to_images(
 
     await _save_upload(file, input_path, MAX_PDF_SIZE)
     try:
-        await pdf_service.pdf_to_images(input_path, output_path, output_format, quality)
+        # Add timeout protection (5 minutes max for large PDFs)
+        await asyncio.wait_for(
+            pdf_service.pdf_to_images(input_path, output_path, output_format, quality),
+            timeout=300.0
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"PDF to images timeout for file: {file.filename}")
+        _cleanup(job_dir)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="PDF processing timeout. File may be too large or complex.",
+        )
     except Exception as e:
         logger.error(f"PDF to images failed: {e}\n{traceback.format_exc()}")
         _cleanup(job_dir)

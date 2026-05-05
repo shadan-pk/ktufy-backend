@@ -3,7 +3,14 @@ Syllabus-related Pydantic schemas
 Defines data models for syllabus browsing API
 """
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Any
+
+
+class TicklistRequest(BaseModel):
+    """Schema for AI ticklist (topics) generation request"""
+    subject_code: str = Field(..., description="Subject code (e.g. CST201)")
+    subject_name: str = Field(..., description="Subject name (e.g. Data Structures)")
+    module_number: int = Field(..., description="Module number (1-5)")
 
 
 class ModuleItem(BaseModel):

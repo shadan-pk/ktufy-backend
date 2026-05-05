@@ -24,12 +24,16 @@ async def merge_pdfs(
     Mirrors cvert mergePdfs — iterates inputs and inserts pages.
     """
     result = fitz.open()
-    for pdf_path in input_paths:
-        doc = fitz.open(pdf_path)
-        result.insert_pdf(doc)
-        doc.close()
-    result.save(output_path)
-    result.close()
+    try:
+        for pdf_path in input_paths:
+            doc = fitz.open(pdf_path)
+            try:
+                result.insert_pdf(doc)
+            finally:
+                doc.close()
+        result.save(output_path)
+    finally:
+        result.close()
 
 
 def _parse_page_ranges(range_str: str, total_pages: int) -> List[List[int]]:
@@ -72,25 +76,27 @@ async def split_pdf(
     Mirrors cvert splitPdf with range parsing.
     """
     source = fitz.open(input_path)
-    total_pages = source.page_count
-    groups = _parse_page_ranges(ranges, total_pages)
+    try:
+        total_pages = source.page_count
+        groups = _parse_page_ranges(ranges, total_pages)
 
-    if not groups:
+        if not groups:
+            raise ValueError(f"No valid page ranges found in: {ranges}")
+
+        base_name = Path(input_path).stem
+
+        with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for idx, page_indices in enumerate(groups, 1):
+                new_pdf = fitz.open()
+                try:
+                    for page_num in page_indices:
+                        new_pdf.insert_pdf(source, from_page=page_num, to_page=page_num)
+                    pdf_bytes = new_pdf.tobytes()
+                    zf.writestr(f"{base_name}_part{idx}.pdf", pdf_bytes)
+                finally:
+                    new_pdf.close()
+    finally:
         source.close()
-        raise ValueError(f"No valid page ranges found in: {ranges}")
-
-    base_name = Path(input_path).stem
-
-    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for idx, page_indices in enumerate(groups, 1):
-            new_pdf = fitz.open()
-            for page_num in page_indices:
-                new_pdf.insert_pdf(source, from_page=page_num, to_page=page_num)
-            pdf_bytes = new_pdf.tobytes()
-            new_pdf.close()
-            zf.writestr(f"{base_name}_part{idx}.pdf", pdf_bytes)
-
-    source.close()
 
 
 # DPI presets for PDF compression (mirrors spec quality map)
@@ -112,45 +118,46 @@ async def compress_pdf(
     cvert's pdf-lib only does object-stream compression; PyMuPDF can do more.
     """
     doc = fitz.open(input_path)
+    try:
+        # Compress images within pages if not 'max'
+        target_dpi = COMPRESS_DPI_MAP.get(quality, 150)
+        if target_dpi > 0:
+            for page in doc:
+                image_list = page.get_images(full=True)
+                for img_info in image_list:
+                    xref = img_info[0]
+                    try:
+                        base_image = doc.extract_image(xref)
+                        if base_image:
+                            img_bytes = base_image["image"]
+                            img = Image.open(io.BytesIO(img_bytes))
+                            # Only downscale if image is bigger than target
+                            w, h = img.size
+                            # Rough check: if image DPI is higher than target, resize
+                            scale = target_dpi / 150.0  # normalize
+                            new_w = max(1, int(w * min(scale, 1.0)))
+                            new_h = max(1, int(h * min(scale, 1.0)))
+                            if new_w < w or new_h < h:
+                                img = img.resize((new_w, new_h), Image.LANCZOS)
+                            # Re-encode as JPEG
+                            buf = io.BytesIO()
+                            if img.mode in ("RGBA", "LA", "P"):
+                                img = img.convert("RGB")
+                            img.save(buf, format="JPEG", quality=75, optimize=True)
+                            # Note: PyMuPDF doesn't easily replace images in-place,
+                            # so we rely on save-time compression below
+                    except Exception:
+                        continue  # Skip problematic images
 
-    # Compress images within pages if not 'max'
-    target_dpi = COMPRESS_DPI_MAP.get(quality, 150)
-    if target_dpi > 0:
-        for page in doc:
-            image_list = page.get_images(full=True)
-            for img_info in image_list:
-                xref = img_info[0]
-                try:
-                    base_image = doc.extract_image(xref)
-                    if base_image:
-                        img_bytes = base_image["image"]
-                        img = Image.open(io.BytesIO(img_bytes))
-                        # Only downscale if image is bigger than target
-                        w, h = img.size
-                        # Rough check: if image DPI is higher than target, resize
-                        scale = target_dpi / 150.0  # normalize
-                        new_w = max(1, int(w * min(scale, 1.0)))
-                        new_h = max(1, int(h * min(scale, 1.0)))
-                        if new_w < w or new_h < h:
-                            img = img.resize((new_w, new_h), Image.LANCZOS)
-                        # Re-encode as JPEG
-                        buf = io.BytesIO()
-                        if img.mode in ("RGBA", "LA", "P"):
-                            img = img.convert("RGB")
-                        img.save(buf, format="JPEG", quality=75, optimize=True)
-                        # Note: PyMuPDF doesn't easily replace images in-place,
-                        # so we rely on save-time compression below
-                except Exception:
-                    continue  # Skip problematic images
-
-    # Save with garbage collection and deflate
-    doc.save(
-        output_path,
-        garbage=4,        # Maximum garbage collection
-        deflate=True,     # Compress streams
-        clean=True,       # Clean up unused objects
-    )
-    doc.close()
+        # Save with garbage collection and deflate
+        doc.save(
+            output_path,
+            garbage=4,        # Maximum garbage collection
+            deflate=True,     # Compress streams
+            clean=True,       # Clean up unused objects
+        )
+    finally:
+        doc.close()
 
 
 async def images_to_pdf(
@@ -166,19 +173,27 @@ async def images_to_pdf(
         raise ValueError("No images provided")
 
     images = []
-    for path in input_paths:
-        img = Image.open(path)
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-        images.append(img)
+    try:
+        for path in input_paths:
+            img = Image.open(path)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            images.append(img)
 
-    # Save first image as PDF, append rest
-    images[0].save(
-        output_path,
-        format="PDF",
-        save_all=True,
-        append_images=images[1:] if len(images) > 1 else [],
-    )
+        # Save first image as PDF, append rest
+        images[0].save(
+            output_path,
+            format="PDF",
+            save_all=True,
+            append_images=images[1:] if len(images) > 1 else [],
+        )
+    finally:
+        # Cleanup images
+        for img in images:
+            try:
+                img.close()
+            except Exception:
+                pass
 
 
 # DPI presets for pdf-to-images
@@ -201,33 +216,40 @@ async def pdf_to_images(
     """
     dpi = PDF_TO_IMG_DPI_MAP.get(quality, 150)
     doc = fitz.open(input_path)
-    base_name = Path(input_path).stem
+    try:
+        base_name = Path(input_path).stem
 
-    # Determine Pillow format
-    pil_format = output_format.upper()
-    if pil_format == "JPG":
-        pil_format = "JPEG"
+        # Determine Pillow format
+        pil_format = output_format.upper()
+        if pil_format == "JPG":
+            pil_format = "JPEG"
 
-    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for page_num in range(doc.page_count):
-            page = doc[page_num]
-            # PyMuPDF: matrix for DPI scaling (default is 72 dpi)
-            zoom = dpi / 72.0
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat)
+        with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for page_num in range(doc.page_count):
+                page = doc[page_num]
+                # PyMuPDF: matrix for DPI scaling (default is 72 dpi)
+                zoom = dpi / 72.0
+                mat = fitz.Matrix(zoom, zoom)
+                pix = page.get_pixmap(matrix=mat)
 
-            # Convert to Pillow image for format flexibility
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            buf = io.BytesIO()
+                try:
+                    # Convert to Pillow image for format flexibility
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    buf = io.BytesIO()
 
-            ext = output_format.lower()
-            if ext in ("jpg", "jpeg"):
-                img.save(buf, format="JPEG", quality=85)
-            elif ext == "webp":
-                img.save(buf, format="WEBP", quality=85)
-            else:
-                img.save(buf, format="PNG")
+                    ext = output_format.lower()
+                    if ext in ("jpg", "jpeg"):
+                        img.save(buf, format="JPEG", quality=85, optimize=True)
+                    elif ext == "webp":
+                        img.save(buf, format="WEBP", quality=85)
+                    else:
+                        img.save(buf, format="PNG", optimize=True)
 
-            zf.writestr(f"{base_name}_page_{page_num + 1}.{ext}", buf.getvalue())
-
-    doc.close()
+                    zf.writestr(f"{base_name}_page_{page_num + 1}.{ext}", buf.getvalue())
+                finally:
+                    # Explicitly cleanup large image buffers
+                    pix = None
+                    img = None
+                    buf = None
+    finally:
+        doc.close()
