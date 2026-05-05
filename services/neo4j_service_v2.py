@@ -81,10 +81,10 @@ class Neo4jServiceV2:
         except Exception as e:
             err_str = str(e)
             if "Unauthorized" in err_str or "authentication failure" in err_str:
-                print(f"\u26a0\ufe0f  Neo4j V2 auth failed — check NEO4J_PASSWORD in .env (current URI: {uri})")
+                print(f"Warning: Neo4j V2 auth failed — check NEO4J_PASSWORD in .env (current URI: {uri})")
                 logger.warning(f"Neo4j V2 authentication failed. Verify credentials in .env file.")
             else:
-                print(f"\u26a0\ufe0f  Neo4j V2 unavailable: {err_str[:120]}")
+                print(f"Error: Neo4j V2 unavailable: {err_str[:120]}")
                 logger.error(f"Could not connect to Neo4j V2: {e}")
             self.driver = None
     
@@ -127,8 +127,8 @@ class Neo4jServiceV2:
             "CREATE INDEX concept_type IF NOT EXISTS FOR (c:Concept) ON (c.concept_type)",
             "CREATE INDEX module_subject IF NOT EXISTS FOR (m:Module) ON (m.subject_code)",
             
-            # Full-text search indexes
-            "CREATE FULLTEXT INDEX concept_search IF NOT EXISTS FOR (c:Concept) ON EACH [c.name, c.display_name]",
+            # Full-text search index (V2 - expanded to include modules and subjects)
+            "CREATE FULLTEXT INDEX syllabus_search IF NOT EXISTS FOR (n:Concept|Module|Subject) ON EACH [n.name, n.display_name, n.code]",
         ]
         
         with self.driver.session() as session:
@@ -465,34 +465,70 @@ class Neo4jServiceV2:
             return concept
     
     def search_concepts(self, query: str, limit: int = 20) -> List[dict]:
-        """Full-text search for concepts"""
+        """Search for nodes (Concept, Module, Subject) in the knowledge graph"""
         if not self.driver:
             raise ConnectionError("Neo4j not connected")
         
-        # Try full-text search first
+        # Search using the expanded syllabus_search index
         cypher = """
-        CALL db.index.fulltext.queryNodes('concept_search', $q) 
+        CALL db.index.fulltext.queryNodes('syllabus_search', $q) 
         YIELD node, score
-        MATCH (m:Module)-[:CONTAINS]->(node)
-        MATCH (s:Subject)-[:HAS_MODULE]->(m)
-        RETURN node as c, m, s, score
+        WITH node, score, labels(node)[0] as type
+        
+        # For Concepts, get module and subject info
+        OPTIONAL MATCH (m_from_c:Module)-[:CONTAINS]->(node) WHERE type = 'Concept'
+        OPTIONAL MATCH (s_from_c:Subject)-[:HAS_MODULE]->(m_from_c) WHERE type = 'Concept'
+        
+        # For Modules, get subject info and some topics
+        OPTIONAL MATCH (s_from_m:Subject)-[:HAS_MODULE]->(node) WHERE type = 'Module'
+        OPTIONAL MATCH (node)-[:CONTAINS]->(t:Concept) WHERE type = 'Module'
+        
+        # For Subjects, get some modules
+        OPTIONAL MATCH (node)-[:HAS_MODULE]->(mod:Module) WHERE type = 'Subject'
+        
+        RETURN node as c, type, score,
+               CASE 
+                 WHEN type = 'Concept' THEN m_from_c 
+                 WHEN type = 'Module' THEN node
+                 ELSE null 
+               END as m,
+               CASE 
+                 WHEN type = 'Concept' THEN s_from_c
+                 WHEN type = 'Module' THEN s_from_m
+                 WHEN type = 'Subject' THEN node
+                 ELSE null
+               END as s,
+               collect(DISTINCT t.name)[..10] as topics,
+               collect(DISTINCT mod.name)[..5] as modules
         ORDER BY score DESC
         LIMIT $limit
         """
         
         try:
             with self.driver.session() as session:
-                result = session.run(cypher, q=f"*{query}*", limit=limit)
-                concepts = []
+                # Use fuzzy search for better results
+                search_query = f"{query}~" if len(query) > 3 else f"*{query}*"
+                result = session.run(cypher, q=search_query, limit=limit)
+                results = []
                 for record in result:
-                    concept = dict(record["c"])
-                    concept["module"] = dict(record["m"])
-                    concept["subject"] = dict(record["s"])
-                    concept["score"] = record["score"]
-                    concepts.append(concept)
-                return concepts
-        except:
-            # Fallback to CONTAINS search
+                    node = dict(record["c"])
+                    node["type"] = record["type"]
+                    node["score"] = record["score"]
+                    
+                    if record["m"]:
+                        node["module"] = dict(record["m"])
+                    if record["s"]:
+                        node["subject"] = dict(record["s"])
+                        
+                    if record["topics"]:
+                        node["topics"] = record["topics"]
+                    if record["modules"]:
+                        node["modules"] = record["modules"]
+                        
+                    results.append(node)
+                return results
+        except Exception as e:
+            logger.warning(f"Fulltext search failed: {e}. Falling back to basic search.")
             return self._search_concepts_fallback(query, limit)
     
     def _search_concepts_fallback(self, query: str, limit: int) -> List[dict]:
@@ -601,14 +637,18 @@ class Neo4jServiceV2:
         if not self.driver:
             raise ConnectionError("Neo4j not connected")
         
-        query = """
-        MATCH path = (prereq:Concept)-[:PREREQUISITE_OF*1..$depth]->(c:Concept {id: $id})
+        # Cypher doesn't allow parameters for relationship depth (*1..$depth)
+        # We must use a literal value here.
+        safe_depth = min(max(int(depth), 1), 5)
+        
+        query = f"""
+        MATCH path = (prereq:Concept)-[:PREREQUISITE_OF*1..{safe_depth}]->(c:Concept {{id: $id}})
         RETURN prereq, length(path) as distance
         ORDER BY distance
         """
         
         with self.driver.session() as session:
-            result = session.run(query, id=concept_id, depth=depth)
+            result = session.run(query, id=concept_id)
             return [
                 {"concept": dict(record["prereq"]), "distance": record["distance"]}
                 for record in result

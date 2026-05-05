@@ -180,47 +180,56 @@ class ChatService:
         if kg_results:
             parts.append("=== KNOWLEDGE GRAPH CONTEXT ===")
             for i, concept in enumerate(kg_results[:3], 1):
-                concept_type = concept.get('type', 'Concept')
+                concept_type = concept.get('type', concept.get('concept_type', 'Concept'))
                 concept_name = concept.get('name', 'Unknown')
+                
+                # Extract related info from nested dicts if present
+                subj = concept.get("subject", {})
+                mod = concept.get("module", {})
+                
+                subj_code = subj.get("code") or concept.get("subject_code")
+                mod_num = mod.get("number") or concept.get("module_number")
+                mod_name = mod.get("name") or concept.get("module_name")
                 
                 # Build header with hierarchy info
                 header = f"**{concept_type}: {concept_name}**"
-                if concept.get("subject_code"):
-                    header = f"**{concept_type}: {concept_name}** (Subject: {concept.get('subject_code')})"
-                if concept.get("module_number"):
-                    header += f" [Module {concept.get('module_number')}]"
+                if subj_code:
+                    header = f"**{concept_type}: {concept_name}** (Subject: {subj_code})"
+                if mod_num:
+                    header += f" [Module {mod_num}]"
                     
                 parts.append(f"\n{header}")
                 
-                # Subject info
-                if concept.get("subject_name") and concept_type != 'Subject':
-                    parts.append(f"Subject: {concept.get('subject_name')}")
-                
-                # Module info for topics
-                if concept.get("module_name") and concept_type == 'Topic':
-                    parts.append(f"Module: {concept.get('module_name')}")
-                
-                if concept.get("description"):
-                    parts.append(f"Description: {concept.get('description')}")
+                # Description / Content
+                if concept.get("description") or concept.get("original_text"):
+                    desc = concept.get("description") or concept.get("original_text")
+                    parts.append(f"Content: {desc}")
                 
                 # Show topics for modules
-                if concept_type == 'Module' and concept.get("topics"):
-                    topic_list = [t for t in concept.get("topics", []) if t]
+                if concept_type == 'Module' or 'topics' in concept:
+                    topic_list = concept.get("topics", [])
                     if topic_list:
-                        parts.append(f"Topics: {', '.join(topic_list[:5])}")
+                        parts.append(f"Topics covered: {', '.join(topic_list[:10])}")
                 
                 # Show modules for subjects
-                if concept_type == 'Subject' and concept.get("modules"):
+                if concept_type == 'Subject' or 'modules' in concept:
                     module_list = concept.get("modules", [])
                     if module_list:
-                        mod_names = [f"M{m.get('number', '?')}: {m.get('name', '')}" for m in module_list if m.get('name')]
-                        if mod_names:
-                            parts.append(f"Modules: {', '.join(mod_names[:5])}")
+                        parts.append(f"Modules in this syllabus: {', '.join(module_list[:8])}")
                 
-                # Show keywords if available
-                keywords = concept.get("keywords", [])
-                if keywords and any(keywords):
-                    parts.append(f"Keywords: {', '.join([k for k in keywords if k][:5])}")
+                # Show prerequisites if available
+                prereqs = concept.get("prerequisites", [])
+                if prereqs:
+                    prereq_names = [p.get("concept", {}).get("name") for p in prereqs if p.get("concept", {}).get("name")]
+                    if prereq_names:
+                        parts.append(f"Prerequisites: {', '.join(prereq_names)}")
+                
+                # Show related concepts
+                related = concept.get("relationships", [])
+                if related:
+                    rel_names = [r.get("concept", {}).get("name") for r in related if r.get("concept", {}).get("name")]
+                    if rel_names:
+                        parts.append(f"Related Topics: {', '.join(rel_names)}")
         
         # Format Vector Store results
         vector_results = context.get("vector_results", [])
@@ -455,32 +464,34 @@ Remember: You're here to help students learn and succeed in their studies!"""
         Returns:
             System prompt with context
         """
-        base_prompt = """You are KTUfy AI, an intelligent study assistant for KTU (Kerala Technological University) students.
+        base_prompt = """You are KTUfy AI, the ultimate study companion for KTU (Kerala Technological University) students. 
+Your goal is to provide high-quality, accurate, and syllabus-aligned academic assistance, similar to a specialized version of ChatGPT.
 
-You have access to the official KTU syllabus and course materials through a Knowledge Graph and document database.
+You have access to the **official KTU syllabus**, structured via a Knowledge Graph and a vector database.
 
-Your role:
-- Answer questions using the provided syllabus context when available
-- Help students understand their course materials and topics
-- Explain concepts clearly based on what's in their actual syllabus
-- Identify prerequisites and related topics to guide learning
-- Be accurate and cite the syllabus when relevant
+### 🧠 RESPONSE STRATEGY:
+1.  **Detailed Explanations**: Don't just give brief definitions. Explain concepts in depth, covering their "how" and "why", just like ChatGPT would.
+2.  **Proactive Examples**: For every major concept, provide a **clear example**. 
+    - If it's a programming topic, provide a clean **code snippet**.
+    - If it's a theoretical topic, provide a **real-world analogy**.
+    - If it's a mathematical topic, provide a **step-by-step calculation example**.
+3.  **Syllabus Alignment**: Use the provided context to ensure your examples and explanations match the KTU curriculum standards.
+4.  **Module & Topic Structure**: When explaining a module, list all its topics and then deep-dive into the specific one the student asked about.
+5.  **Interactive Learning**: End your response by asking if they'd like more examples or a practice question on the topic.
 
-Response Formatting Guidelines:
-- Use **bold** for important terms and headings
-- Use bullet points or numbered lists for multiple items
-- Structure longer responses with clear sections
-- Include the actual subject code and module number when available from context
-- For module explanations, list the key topics covered
-- Keep responses educational and well-organized
-- Use markdown formatting for better readability
+### ✍️ FORMATTING RULES:
+- Use **bold** for technical terms.
+- Use `###` for section headers.
+- Use code blocks (```language) for all technical examples.
+- Use bullet points for structured data.
+- Always mention: "According to the KTU syllabus for [Subject Code]..."
 
-Important Rules:
-- ALWAYS prioritize information from the provided context over general knowledge
-- If explaining a module, list all topics actually in that module from context
-- Do NOT make up page numbers or references - only cite what's in the context
-- If context doesn't have specific details, acknowledge this and provide helpful general information
-- Say "Based on the KTU syllabus..." when using context information"""
+### 🎓 TONE:
+Helpful, expert, and encouraging. You are an elite tutor who makes complex topics easy to understand through great examples."""
+- If no context is found, say: "I couldn't find specific details for this in the KTU syllabus database, but here is a general academic explanation..."
+
+### 🎓 TONE:
+Helpful, academic yet accessible, and encouraging. You are like a senior student or a friendly tutor who knows the syllabus inside out."""
         
         if context:
             return f"""{base_prompt}

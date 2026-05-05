@@ -402,7 +402,6 @@ async function analyzeSyllabusMetadata(file) {
     const semTrigger = document.getElementById('upload-semester').closest('.custom-select')?.querySelector('.trigger-text');
     
     if (branchTrigger) branchTrigger.textContent = 'Auto-detecting...';
-    if (semTrigger) semTrigger.textContent = '...';
 
     const formData = new FormData();
     formData.append('file', file);
@@ -422,12 +421,6 @@ async function analyzeSyllabusMetadata(file) {
                 if (custom) custom.setValue(data.branch.toUpperCase());
             }
             
-            if (data.semester) {
-                const select = document.getElementById('upload-semester');
-                const custom = select.closest('.custom-select')._customSelect;
-                if (custom) custom.setValue(data.semester.toString());
-            }
-            
             if (data.regulation) {
                 const select = document.getElementById('upload-regulation');
                 const custom = select.closest('.custom-select')._customSelect;
@@ -435,7 +428,7 @@ async function analyzeSyllabusMetadata(file) {
             }
             
             if (data.confidence > 0.5) {
-                showToast(`Auto-detected: ${data.branch} S${data.semester} (${data.regulation})`, 'success');
+                showToast(`Auto-detected: ${data.branch} (${data.regulation})`, 'success');
             }
         }
     } catch (error) {

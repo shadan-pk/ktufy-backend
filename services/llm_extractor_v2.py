@@ -124,8 +124,7 @@ class LLMExtractorV2:
         """
         prompt = f"""You are a KTU syllabus metadata extractor. Analyze the provided text from the first page of a syllabus and extract the following:
 1. Branch (e.g., CSE, ECE, ME, CE, AI, DS, etc.)
-2. Semester (1 to 8)
-3. Regulation (Year of introduction, e.g., 2019, 2024)
+2. Regulation (Year of introduction, e.g., 2019, 2024)
 
 SYLLABUS TEXT (FIRST PAGE):
 {first_page_text}
@@ -133,7 +132,6 @@ SYLLABUS TEXT (FIRST PAGE):
 Return ONLY valid JSON:
 {{
     "branch": "CSE",
-    "semester": 3,
     "regulation": "2019",
     "confidence": 0.95
 }}
@@ -145,7 +143,7 @@ If you cannot find a field, use null.
             return self._parse_json_response(response)
         except Exception as e:
             logger.warning(f"Could not extract metadata: {e}")
-            return {"branch": None, "semester": None, "regulation": "2019", "confidence": 0}
+            return {"branch": None, "regulation": "2019", "confidence": 0}
 
     def extract_syllabus_structure(
         self, 
