@@ -265,6 +265,7 @@ class ChatService:
         semester: Optional[int] = None,
         branch: Optional[str] = None,
         subject_code: Optional[str] = None,
+        system_prompt: Optional[str] = None,
         stream: bool = False
     ) -> Union[str, AsyncGenerator[str, None]]:
         """
@@ -276,6 +277,7 @@ class ChatService:
             semester: Optional filter
             branch: Optional filter
             subject_code: Optional filter
+            system_prompt: Optional system prompt override for this request
             stream: Whether to stream response
             
         Returns:
@@ -307,7 +309,20 @@ class ChatService:
             print(f"   📝 Context preview: {context_str[:500]}...")
         
         # Build messages
-        messages = [{"role": "system", "content": self.get_rag_system_prompt(context_str)}]
+        if system_prompt and system_prompt.strip():
+            system_content = system_prompt.strip()
+            if context_str:
+                system_content = (
+                    f"{system_content}\n\n"
+                    "=== RELEVANT CONTEXT FROM KTU SYLLABUS ===\n"
+                    f"{context_str}\n"
+                    "=== END OF CONTEXT ===\n\n"
+                    "Use the above context when answering."
+                )
+        else:
+            system_content = self.get_rag_system_prompt(context_str)
+
+        messages = [{"role": "system", "content": system_content}]
         
         # Add conversation history
         if conversation_history:

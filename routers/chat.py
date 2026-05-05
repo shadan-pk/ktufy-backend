@@ -258,6 +258,7 @@ async def send_message(
             ai_response = await chat_service.generate_rag_response(
                 query=chat_request.message,
                 conversation_history=conversation_history,
+                system_prompt=chat_request.system_prompt,
                 stream=False
             )
         except Exception as e:

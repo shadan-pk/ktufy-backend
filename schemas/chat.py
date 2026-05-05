@@ -114,12 +114,19 @@ class ChatRequest(BaseModel):
     """Schema for sending a chat message"""
     message: str = Field(..., min_length=1, max_length=4000, description="User message")
     session_id: Optional[UUID] = Field(None, description="Session ID (creates new if not provided)")
+    system_prompt: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=8000,
+        description="Optional system prompt override for this request"
+    )
     
     class Config:
         json_schema_extra = {
             "example": {
                 "message": "Can you explain recursion in Python?",
-                "session_id": "123e4567-e89b-12d3-a456-426614174001"
+                "session_id": "123e4567-e89b-12d3-a456-426614174001",
+                "system_prompt": "Be concise and ask one follow-up question at the end."
             }
         }
 
