@@ -97,9 +97,12 @@ class CustomSelect {
             this.isOpen = false;
             this.wrapper.classList.remove('open');
 
+            // Trigger native change event
+            this.nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
             // Trigger change callback
             if (this.onchangeFn && typeof window[this.onchangeFn] === 'function') {
-                window[this.onchangeFn]();
+                window[this.onchangeFn](this.nativeSelect.value);
             }
         });
     }
@@ -115,6 +118,9 @@ class CustomSelect {
             this.dropdown.querySelectorAll('.custom-select-option').forEach(o => {
                 o.classList.toggle('selected', o.dataset.value === value);
             });
+            
+            // Trigger native change event
+            this.nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
         }
     }
 }
@@ -474,7 +480,7 @@ function getBatchRowHtml(f, index) {
             </div>
         </td>
         <td>
-            <div class="custom-select" data-id="branch-${f.id}" onchange="updateBatchData('${f.id}', 'branch', this)">
+            <div class="custom-select" data-id="branch-${f.id}">
                 <select onchange="updateBatchData('${f.id}', 'branch', this)">
                     <option value="">Select Branch</option>
                     <option value="CSE" ${f.branch === 'CSE' ? 'selected' : ''}>CSE</option>
@@ -489,7 +495,7 @@ function getBatchRowHtml(f, index) {
             </div>
         </td>
         <td>
-            <div class="custom-select" data-id="semester-${f.id}" onchange="updateBatchData('${f.id}', 'semester', this)">
+            <div class="custom-select" data-id="semester-${f.id}">
                 <select onchange="updateBatchData('${f.id}', 'semester', this)">
                     <option value="">Select Sem</option>
                     <option value="1" ${f.semester === '1' ? 'selected' : ''}>S1</option>
@@ -504,7 +510,7 @@ function getBatchRowHtml(f, index) {
             </div>
         </td>
         <td>
-            <div class="custom-select" data-id="regulation-${f.id}" onchange="updateBatchData('${f.id}', 'regulation', this)">
+            <div class="custom-select" data-id="regulation-${f.id}">
                 <select onchange="updateBatchData('${f.id}', 'regulation', this)">
                     <option value="2019" ${f.regulation === '2019' ? 'selected' : ''}>2019</option>
                     <option value="2024" ${f.regulation === '2024' ? 'selected' : ''}>2024</option>

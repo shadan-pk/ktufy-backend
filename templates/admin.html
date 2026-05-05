@@ -330,6 +330,11 @@
         tbody tr:hover { background: hsl(240 3.7% 10%); }
         .td-empty { text-align: center; color: var(--muted-foreground); padding: 2rem 1rem; }
 
+        /* Specific fix for batch table clipping */
+        .batch-table-wrap { overflow: visible !important; min-height: 200px; padding-bottom: 80px; }
+        .batch-table-wrap table { table-layout: fixed; }
+        .batch-table-wrap td { overflow: visible !important; }
+
         /* ═══════════════════════════════════════════════════════════════════
            Badge
            ═══════════════════════════════════════════════════════════════════ */
@@ -628,7 +633,7 @@
                                 <button class="btn btn-outline btn-sm" onclick="clearBatch()"><i data-lucide="trash-2"></i> Clear All</button>
                             </div>
                         </div>
-                        <div class="table-wrap">
+                        <div class="table-wrap batch-table-wrap">
                             <table id="batch-table">
                                 <thead>
                                     <tr>
