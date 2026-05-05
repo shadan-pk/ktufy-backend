@@ -354,14 +354,16 @@ async function refreshStats() {
 // File Upload
 // ═══════════════════════════════════════════════════════════════════════════════
 
-let selectedFile = null;
+// ═══════════════════════════════════════════════════════════════════════════════
+// Batch File Upload
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let batchFiles = [];
 
 function initUploadZone() {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     if (!dropZone || !fileInput) return;
-
-    dropZone.addEventListener('click', () => fileInput.click());
 
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -375,36 +377,47 @@ function initUploadZone() {
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('dragover');
-        const files = e.dataTransfer.files;
-        if (files.length > 0 && files[0].type === 'application/pdf') {
-            selectedFile = files[0];
-            document.getElementById('selected-file').textContent = `Selected: ${files[0].name}`;
-            analyzeSyllabusMetadata(selectedFile);
-        } else {
-            showToast('Please select a PDF file', 'warning');
-        }
+        handleFilesSelected(e.dataTransfer.files);
     });
 
     fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            selectedFile = e.target.files[0];
-            document.getElementById('selected-file').textContent = `Selected: ${selectedFile.name}`;
-            analyzeSyllabusMetadata(selectedFile);
-        }
+        handleFilesSelected(e.target.files);
     });
 }
 
-async function analyzeSyllabusMetadata(file) {
-    if (!file) return;
-
-    // Show a subtle loading state in the dropdowns
-    const branchTrigger = document.getElementById('upload-branch').closest('.custom-select')?.querySelector('.trigger-text');
-    const semTrigger = document.getElementById('upload-semester').closest('.custom-select')?.querySelector('.trigger-text');
+function handleFilesSelected(fileList) {
+    const files = Array.from(fileList).filter(f => f.type === 'application/pdf');
     
-    if (branchTrigger) branchTrigger.textContent = 'Auto-detecting...';
+    if (files.length === 0) {
+        showToast('Please select valid PDF files', 'warning');
+        return;
+    }
+
+    files.forEach(file => {
+        // Add to batch with default metadata
+        const fileObj = {
+            file: file,
+            id: Math.random().toString(36).substr(2, 9),
+            branch: '',
+            semester: '',
+            regulation: '2019',
+            analyzing: false
+        };
+        batchFiles.push(fileObj);
+        
+        // Start auto-analysis for each file
+        analyzeBatchFile(fileObj);
+    });
+
+    renderBatchTable();
+}
+
+async function analyzeBatchFile(fileObj) {
+    fileObj.analyzing = true;
+    updateBatchRow(fileObj);
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', fileObj.file);
 
     try {
         const response = await fetch(`${API_BASE_V2}/analyze-pdf`, {
@@ -414,65 +427,189 @@ async function analyzeSyllabusMetadata(file) {
 
         if (response.ok) {
             const data = await response.json();
-            
-            if (data.branch) {
-                const select = document.getElementById('upload-branch');
-                const custom = select.closest('.custom-select')._customSelect;
-                if (custom) custom.setValue(data.branch.toUpperCase());
-            }
-            
-            if (data.regulation) {
-                const select = document.getElementById('upload-regulation');
-                const custom = select.closest('.custom-select')._customSelect;
-                if (custom) custom.setValue(data.regulation);
-            }
-            
-            if (data.confidence > 0.5) {
-                showToast(`Auto-detected: ${data.branch} (${data.regulation})`, 'success');
-            }
+            if (data.branch) fileObj.branch = data.branch.toUpperCase();
+            if (data.regulation) fileObj.regulation = data.regulation;
+            fileObj.analyzing = false;
+            updateBatchRow(fileObj);
         }
     } catch (error) {
         console.error('Error analyzing metadata:', error);
-    } finally {
-        // Restore triggers if analysis failed or finished
-        if (branchTrigger && branchTrigger.textContent === 'Auto-detecting...') {
-            const select = document.getElementById('upload-branch');
-            branchTrigger.textContent = select.options[select.selectedIndex].text;
-        }
+        fileObj.analyzing = false;
+        updateBatchRow(fileObj);
     }
 }
 
-function initUploadForm() {
-    const form = document.getElementById('upload-form');
-    if (!form) return;
+function renderBatchTable() {
+    const container = document.getElementById('batch-config-container');
+    const list = document.getElementById('batch-files-list');
+    const countText = document.getElementById('selected-files-count');
+    
+    if (batchFiles.length === 0) {
+        container.style.display = 'none';
+        countText.textContent = 'No files selected';
+        return;
+    }
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    container.style.display = 'block';
+    countText.textContent = `${batchFiles.length} file(s) ready for configuration`;
+    list.innerHTML = '';
 
-        if (!selectedFile) {
-            showToast('Please select a PDF file', 'warning');
-            return;
+    batchFiles.forEach((f, index) => {
+        const row = document.createElement('tr');
+        row.id = `batch-row-${f.id}`;
+        row.innerHTML = getBatchRowHtml(f, index);
+        list.appendChild(row);
+    });
+
+    initCustomSelects(list);
+    updateBatchSummary();
+}
+
+function getBatchRowHtml(f, index) {
+    return `
+        <td>
+            <div class="flex items-center gap-sm">
+                ${f.analyzing ? '<span class="spinner"></span>' : '<i data-lucide="file-text" class="text-muted" style="width:16px"></i>'}
+                <span class="font-medium text-sm truncate" style="max-width:250px" title="${f.file.name}">${f.file.name}</span>
+            </div>
+        </td>
+        <td>
+            <div class="custom-select" data-id="branch-${f.id}" onchange="updateBatchData('${f.id}', 'branch', this)">
+                <select onchange="updateBatchData('${f.id}', 'branch', this)">
+                    <option value="">Select Branch</option>
+                    <option value="CSE" ${f.branch === 'CSE' ? 'selected' : ''}>CSE</option>
+                    <option value="ECE" ${f.branch === 'ECE' ? 'selected' : ''}>ECE</option>
+                    <option value="EEE" ${f.branch === 'EEE' ? 'selected' : ''}>EEE</option>
+                    <option value="ME" ${f.branch === 'ME' ? 'selected' : ''}>ME</option>
+                    <option value="CE" ${f.branch === 'CE' ? 'selected' : ''}>CE</option>
+                    <option value="IT" ${f.branch === 'IT' ? 'selected' : ''}>IT</option>
+                    <option value="AI" ${f.branch === 'AI' ? 'selected' : ''}>AI</option>
+                    <option value="DS" ${f.branch === 'DS' ? 'selected' : ''}>DS</option>
+                </select>
+            </div>
+        </td>
+        <td>
+            <div class="custom-select" data-id="semester-${f.id}" onchange="updateBatchData('${f.id}', 'semester', this)">
+                <select onchange="updateBatchData('${f.id}', 'semester', this)">
+                    <option value="">Select Sem</option>
+                    <option value="1" ${f.semester === '1' ? 'selected' : ''}>S1</option>
+                    <option value="2" ${f.semester === '2' ? 'selected' : ''}>S2</option>
+                    <option value="3" ${f.semester === '3' ? 'selected' : ''}>S3</option>
+                    <option value="4" ${f.semester === '4' ? 'selected' : ''}>S4</option>
+                    <option value="5" ${f.semester === '5' ? 'selected' : ''}>S5</option>
+                    <option value="6" ${f.semester === '6' ? 'selected' : ''}>S6</option>
+                    <option value="7" ${f.semester === '7' ? 'selected' : ''}>S7</option>
+                    <option value="8" ${f.semester === '8' ? 'selected' : ''}>S8</option>
+                </select>
+            </div>
+        </td>
+        <td>
+            <div class="custom-select" data-id="regulation-${f.id}" onchange="updateBatchData('${f.id}', 'regulation', this)">
+                <select onchange="updateBatchData('${f.id}', 'regulation', this)">
+                    <option value="2019" ${f.regulation === '2019' ? 'selected' : ''}>2019</option>
+                    <option value="2024" ${f.regulation === '2024' ? 'selected' : ''}>2024</option>
+                    <option value="2028" ${f.regulation === '2028' ? 'selected' : ''}>2028</option>
+                </select>
+            </div>
+        </td>
+        <td>
+            <button class="btn btn-ghost btn-sm text-danger" onclick="removeFromBatch('${f.id}')"><i data-lucide="x"></i></button>
+        </td>
+    `;
+}
+
+function updateBatchRow(fileObj) {
+    const row = document.getElementById(`batch-row-${fileObj.id}`);
+    if (!row) return;
+    
+    // We need to preserve the selections if they were manually changed
+    // But for auto-detection, we update the whole row
+    const index = batchFiles.findIndex(f => f.id === fileObj.id);
+    row.innerHTML = getBatchRowHtml(fileObj, index);
+    
+    // Re-init lucide icons and custom selects for this row
+    lucide.createIcons({ scope: row });
+    initCustomSelects(row);
+}
+
+function updateBatchData(id, field, element) {
+    const fileObj = batchFiles.find(f => f.id === id);
+    if (!fileObj) return;
+    
+    // The element might be the wrapper or the native select
+    const select = element.querySelector('select') || element;
+    fileObj[field] = select.value;
+    updateBatchSummary();
+}
+
+function applyToAll(field) {
+    if (batchFiles.length < 2) return;
+    
+    const firstVal = batchFiles[0][field];
+    if (!firstVal && field !== 'regulation') {
+        showToast(`Please select a ${field} for the first file first`, 'warning');
+        return;
+    }
+
+    batchFiles.forEach((f, i) => {
+        if (i === 0) return;
+        f[field] = firstVal;
+        
+        // Update the UI for this field
+        const wrapper = document.querySelector(`[data-id="${field}-${f.id}"]`);
+        if (wrapper && wrapper._customSelect) {
+            wrapper._customSelect.setValue(firstVal);
         }
+    });
+    
+    showToast(`Applied ${firstVal} to all ${batchFiles.length} files`, 'success');
+    updateBatchSummary();
+}
 
-        const branch = document.getElementById('upload-branch').value;
-        const semester = document.getElementById('upload-semester').value;
-        const regulation = document.getElementById('upload-regulation').value;
+function removeFromBatch(id) {
+    batchFiles = batchFiles.filter(f => f.id !== id);
+    renderBatchTable();
+}
 
-        if (!branch || !semester) {
-            showToast('Please select branch and semester', 'warning');
-            return;
-        }
+function clearBatch() {
+    batchFiles = [];
+    renderBatchTable();
+}
 
+function updateBatchSummary() {
+    const info = document.getElementById('batch-total-info');
+    if (!info) return;
+    
+    const total = batchFiles.length;
+    const ready = batchFiles.filter(f => f.branch && f.semester).length;
+    
+    info.textContent = `${ready}/${total} files configured`;
+}
+
+async function processBatch() {
+    const unconfigured = batchFiles.filter(f => !f.branch || !f.semester);
+    if (unconfigured.length > 0) {
+        showToast(`Please configure Branch and Semester for all ${unconfigured.length} files`, 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('process-batch-btn');
+    const spinner = btn.querySelector('.spinner');
+    const text = btn.querySelector('.btn-text');
+    
+    btn.disabled = true;
+    spinner.style.display = 'inline-block';
+    text.textContent = 'Processing Batch...';
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const f of batchFiles) {
         const formData = new FormData();
-        formData.append('file', selectedFile);
-        formData.append('branch', branch);
-        formData.append('semester', semester);
-        formData.append('regulation', regulation);
-
-        const uploadBtn = document.getElementById('upload-btn');
-        uploadBtn.querySelector('.spinner').style.display = 'inline-block';
-        uploadBtn.querySelector('.btn-text').style.display = 'none';
-        uploadBtn.disabled = true;
+        formData.append('file', f.file);
+        formData.append('branch', f.branch);
+        formData.append('semester', f.semester);
+        formData.append('regulation', f.regulation);
 
         try {
             const response = await fetch(`${API_BASE_V2}/upload`, {
@@ -480,32 +617,33 @@ function initUploadForm() {
                 body: formData
             });
 
-            const data = await response.json();
-
             if (response.ok) {
-                showToast('File uploaded! Processing started...', 'success');
-                document.getElementById('upload-progress').style.display = 'block';
-
-                // Start polling for progress (fast: every 800ms)
-                pollJobProgress(data.id);
-
-                selectedFile = null;
-                document.getElementById('selected-file').textContent = '';
-                document.getElementById('file-input').value = '';
+                successCount++;
             } else {
-                showToast(data.detail || 'Upload failed', 'danger');
+                failCount++;
             }
-
         } catch (error) {
-            console.error('Upload error:', error);
-            showToast('Upload failed: ' + error.message, 'danger');
-        } finally {
-            uploadBtn.querySelector('.spinner').style.display = 'none';
-            uploadBtn.querySelector('.btn-text').style.display = '';
-            uploadBtn.disabled = false;
+            failCount++;
         }
-    });
+    }
+
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    text.innerHTML = '<i data-lucide="play"></i> Start Batch Processing';
+    lucide.createIcons({ scope: btn });
+
+    if (successCount > 0) {
+        showToast(`Successfully queued ${successCount} files for processing`, 'success');
+        clearBatch();
+        loadUploadedFiles();
+        loadJobs();
+    }
+    
+    if (failCount > 0) {
+        showToast(`Failed to upload ${failCount} files`, 'danger');
+    }
 }
+
 
 async function pollJobProgress(jobId) {
     const progressBar = document.getElementById('progress-bar');
@@ -1189,7 +1327,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Bind upload + search forms
     initUploadZone();
-    initUploadForm();
     initSearchForm();
 
     // Load dashboard

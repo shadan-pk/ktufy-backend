@@ -605,77 +605,72 @@
 
             <!-- Upload -->
             <section id="upload-section" class="content-section">
-                <div class="page-header"><h2>Upload Syllabus PDF</h2><p>Upload and process KTU syllabus documents into the knowledge graph</p></div>
+                <div class="page-header"><h2>Batch Syllabus Parser</h2><p>Upload multiple KTU syllabus PDFs and process them into the knowledge graph</p></div>
+                
                 <div class="card mb-md">
                     <div class="card-body">
-                        <form id="upload-form">
-                            <div class="grid-3 gap-md mb-md">
-                                <div class="form-group">
-                                    <label class="form-label">Branch</label>
-                                    <div class="custom-select" data-id="upload-branch">
-                                        <select id="upload-branch" required>
-                                            <option value="">Select Branch</option>
-                                            <option value="CSE">CSE - Computer Science</option>
-                                            <option value="ECE">ECE - Electronics & Communication</option>
-                                            <option value="EEE">EEE - Electrical & Electronics</option>
-                                            <option value="ME">ME - Mechanical</option>
-                                            <option value="CE">CE - Civil</option>
-                                            <option value="IT">IT - Information Technology</option>
-                                            <option value="AI">AI - Artificial Intelligence</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Semester</label>
-                                    <div class="custom-select" data-id="upload-semester">
-                                        <select id="upload-semester" required>
-                                            <option value="">Select Semester</option>
-                                            <option value="1">Semester 1</option><option value="2">Semester 2</option>
-                                            <option value="3">Semester 3</option><option value="4">Semester 4</option>
-                                            <option value="5">Semester 5</option><option value="6">Semester 6</option>
-                                            <option value="7">Semester 7</option><option value="8">Semester 8</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Regulation</label>
-                                    <div class="custom-select" data-id="upload-regulation">
-                                        <select id="upload-regulation">
-                                            <option value="2019">2019</option>
-                                            <option value="2024">2024</option>
-                                            <option value="2028">2028</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="upload-zone" id="drop-zone">
-                                <input type="file" id="file-input" accept=".pdf" hidden>
-                                <div class="upload-icon"><i data-lucide="upload-cloud" style="width:48px;height:48px"></i></div>
-                                <h5>Drag & Drop PDF Here</h5>
-                                <p>or click to browse</p>
-                                <p class="text-sm text-muted" id="selected-file"></p>
-                            </div>
-                            <div style="margin-top:1.25rem">
-                                <button type="submit" class="btn btn-primary btn-lg" id="upload-btn">
-                                    <span class="spinner" style="display:none"></span>
-                                    <span class="btn-text"><i data-lucide="upload"></i> Upload & Process</span>
-                                </button>
-                            </div>
-                        </form>
-                        <div id="upload-progress" class="mt-md" style="display:none;">
-                            <div class="flex items-center justify-between mb-sm">
-                                <span class="text-sm" id="progress-status">Processing...</span>
-                                <span class="text-sm font-medium" id="progress-percent">0%</span>
-                            </div>
-                            <div class="progress-bar-wrap">
-                                <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
-                            </div>
-                            <div class="mt-sm text-sm text-muted" id="progress-detail"></div>
+                        <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+                            <input type="file" id="file-input" accept=".pdf" multiple hidden>
+                            <div class="upload-icon"><i data-lucide="upload-cloud" style="width:48px;height:48px"></i></div>
+                            <h5>Drag & Drop Syllabus PDFs Here</h5>
+                            <p>or click to browse multiple files</p>
+                            <p class="text-sm text-muted mt-sm" id="selected-files-count">No files selected</p>
                         </div>
                     </div>
                 </div>
+
+                <!-- Batch Configuration Table (Visible when files selected) -->
+                <div id="batch-config-container" style="display:none;" class="mb-md">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Configure Batch</h5>
+                            <div class="flex gap-sm">
+                                <button class="btn btn-outline btn-sm" onclick="clearBatch()"><i data-lucide="trash-2"></i> Clear All</button>
+                            </div>
+                        </div>
+                        <div class="table-wrap">
+                            <table id="batch-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:40%">File Name</th>
+                                        <th style="width:20%">
+                                            <div class="flex flex-col gap-xs">
+                                                <span>Branch</span>
+                                                <button class="btn btn-ghost btn-xs" onclick="applyToAll('branch')" title="Apply first to all"><i data-lucide="chevrons-down"></i> Apply All</button>
+                                            </div>
+                                        </th>
+                                        <th style="width:20%">
+                                            <div class="flex flex-col gap-xs">
+                                                <span>Semester</span>
+                                                <button class="btn btn-ghost btn-xs" onclick="applyToAll('semester')" title="Apply first to all"><i data-lucide="chevrons-down"></i> Apply All</button>
+                                            </div>
+                                        </th>
+                                        <th style="width:15%">
+                                            <div class="flex flex-col gap-xs">
+                                                <span>Regulation</span>
+                                                <button class="btn btn-ghost btn-xs" onclick="applyToAll('regulation')" title="Apply first to all"><i data-lucide="chevrons-down"></i> Apply All</button>
+                                            </div>
+                                        </th>
+                                        <th style="width:5%"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="batch-files-list">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="card-footer" style="padding:1.5rem; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:1rem; align-items:center;">
+                            <div id="batch-total-info" class="text-sm text-muted"></div>
+                            <button class="btn btn-primary btn-lg" id="process-batch-btn" onclick="processBatch()">
+                                <span class="spinner" style="display:none"></span>
+                                <span class="btn-text"><i data-lucide="play"></i> Start Batch Processing</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card">
-                    <div class="card-header"><h5>Uploaded Files</h5><button class="btn btn-ghost btn-sm" onclick="loadUploadedFiles()"><i data-lucide="refresh-cw"></i> Refresh</button></div>
+                    <div class="card-header"><h5>Recent Uploads</h5><button class="btn btn-ghost btn-sm" onclick="loadUploadedFiles()"><i data-lucide="refresh-cw"></i> Refresh</button></div>
                     <div class="table-wrap">
                         <table>
                             <thead><tr><th>Filename</th><th>Branch</th><th>Semester</th><th>Size</th><th>Uploaded</th><th>Actions</th></tr></thead>

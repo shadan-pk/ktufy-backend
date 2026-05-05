@@ -488,10 +488,6 @@ You have access to the **official KTU syllabus**, structured via a Knowledge Gra
 
 ### 🎓 TONE:
 Helpful, expert, and encouraging. You are an elite tutor who makes complex topics easy to understand through great examples."""
-- If no context is found, say: "I couldn't find specific details for this in the KTU syllabus database, but here is a general academic explanation..."
-
-### 🎓 TONE:
-Helpful, academic yet accessible, and encouraging. You are like a senior student or a friendly tutor who knows the syllabus inside out."""
         
         if context:
             return f"""{base_prompt}
