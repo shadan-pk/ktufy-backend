@@ -88,7 +88,7 @@ class ChatService:
             
             # KG Search Task
             async def fetch_kg():
-                if query_type in [QueryType.KG_ONLY, QueryType.KG_THEN_VECTOR, QueryType.HYBRID]:
+                if query_type in [QueryType.KG_ONLY, QueryType.KG_THEN_VECTOR, QueryType.HYBRID, QueryType.VECTOR_THEN_KG]:
                     neo4j_connected = neo4j_service.is_connected()
                     if neo4j_connected:
                         try:

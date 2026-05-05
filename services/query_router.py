@@ -156,10 +156,8 @@ class QueryRouter:
         
         if has_content and not has_structural:
             metadata["detected_patterns"].append("content")
-            # If we have specific entity, use vector then enrich with KG
-            if metadata["extracted_entities"]:
-                return QueryType.VECTOR_THEN_KG, metadata
-            return QueryType.VECTOR_ONLY, metadata
+            # Always try to enrich with KG if it's a content query
+            return QueryType.VECTOR_THEN_KG, metadata
         
         # Default: hybrid approach
         return QueryType.HYBRID, metadata
@@ -189,6 +187,14 @@ class QueryRouter:
             sem_num = match[0] or match[1]
             if sem_num:
                 entities.append({"type": "semester", "value": int(sem_num)})
+        
+        # Topic keywords (e.g., "8086", "ARM", "Logic Gate")
+        # Look for capitalized words (proper nouns) or numbers that might be topics
+        topic_pattern = r'\b([A-Z]{2,}\d*|\d{4,})\b'
+        topics = re.findall(topic_pattern, query)
+        for topic in topics:
+            if topic not in [e["value"] for e in entities]:
+                entities.append({"type": "keyword", "value": topic})
         
         return entities
     
