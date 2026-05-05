@@ -87,14 +87,7 @@ class EmbeddingServiceV2:
         regulation: str = "2019"
     ) -> dict:
         """
-        Store content chunks from V2 extractor
-        
-        Args:
-            supabase_client: Supabase client
-            content_chunks: List of chunk dicts from LLMExtractorV2
-            semester: Semester number
-            branch: Branch code
-            regulation: Regulation year
+        Store content chunks from V2 extractor using batching
         """
         stats = {
             "chunks_stored": 0,
@@ -102,26 +95,32 @@ class EmbeddingServiceV2:
             "errors": []
         }
         
-        for chunk in content_chunks:
-            try:
+        if not content_chunks:
+            return stats
+
+        try:
+            # 1. Prepare texts for batch embedding
+            valid_chunks = [c for c in content_chunks if c.get("content")]
+            if not valid_chunks:
+                return stats
+
+            texts = [c.get("content") for c in valid_chunks]
+            
+            # 2. Generate embeddings in one batch (much faster)
+            logger.info(f"Generating embeddings for {len(texts)} chunks in batch...")
+            embeddings = self.generate_embeddings_batch(texts)
+            
+            # 3. Prepare data rows for bulk upsert
+            data_rows = []
+            for i, chunk in enumerate(valid_chunks):
                 chunk_type = chunk.get("chunk_type", "unknown")
-                
-                # Generate embedding for the content
-                content = chunk.get("content", "")
-                if not content:
-                    continue
-                
-                embedding = self.generate_embedding(content)
-                
-                # Merge metadata
                 metadata = chunk.get("metadata", {})
                 
-                # Store in Supabase
-                data = {
-                    "chunk_id": chunk.get("chunk_id", ""),
+                data_rows.append({
+                    "chunk_id": chunk.get("chunk_id", f"{branch}_S{semester}_{i}"),
                     "chunk_type": chunk_type,
-                    "content": content,
-                    "embedding": embedding,
+                    "content": texts[i],
+                    "embedding": embeddings[i],
                     "subject_code": metadata.get("subject_code"),
                     "subject_name": metadata.get("subject_name"),
                     "module_number": metadata.get("module_number"),
@@ -132,18 +131,21 @@ class EmbeddingServiceV2:
                     "semester": semester,
                     "branch": branch,
                     "regulation": regulation
-                }
+                })
                 
-                result = supabase_client.table("syllabus_embeddings").upsert(data, on_conflict="chunk_id").execute()
-                
-                if result.data:
-                    stats["chunks_stored"] += 1
-                    stats["by_type"][chunk_type] = stats["by_type"].get(chunk_type, 0) + 1
-                    
-            except Exception as e:
-                error_msg = f"Error storing chunk '{chunk.get('chunk_id', 'unknown')}': {str(e)}"
-                logger.error(error_msg)
-                stats["errors"].append(error_msg)
+                stats["by_type"][chunk_type] = stats["by_type"].get(chunk_type, 0) + 1
+
+            # 4. Bulk upsert to Supabase
+            logger.info(f"Bulk storing {len(data_rows)} embeddings to Supabase...")
+            result = supabase_client.table("syllabus_embeddings").upsert(data_rows, on_conflict="chunk_id").execute()
+            
+            if result.data:
+                stats["chunks_stored"] = len(result.data)
+            
+        except Exception as e:
+            error_msg = f"Error in batch storage: {str(e)}"
+            logger.error(error_msg)
+            stats["errors"].append(error_msg)
         
         return stats
     

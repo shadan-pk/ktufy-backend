@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     ollama_base_url: Optional[str] = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
     ollama_model: Optional[str] = Field(default="llama3.2", alias="OLLAMA_MODEL")
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
-    llm_rate_limit_rpm: int = Field(default=30, alias="LLM_RATE_LIMIT_RPM")
+    llm_rate_limit_rpm: int = Field(default=300, alias="LLM_RATE_LIMIT_RPM")
     
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

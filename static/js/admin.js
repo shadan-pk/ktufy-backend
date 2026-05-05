@@ -15,6 +15,7 @@ let activeUsersIntervalId = null;
 class CustomSelect {
     constructor(wrapper) {
         this.wrapper = wrapper;
+        this.wrapper._customSelect = this; // Store instance for programmatic access
         this.nativeSelect = wrapper.querySelector('select');
         if (!this.nativeSelect) return;
 
@@ -378,6 +379,7 @@ function initUploadZone() {
         if (files.length > 0 && files[0].type === 'application/pdf') {
             selectedFile = files[0];
             document.getElementById('selected-file').textContent = `Selected: ${files[0].name}`;
+            analyzeSyllabusMetadata(selectedFile);
         } else {
             showToast('Please select a PDF file', 'warning');
         }
@@ -387,8 +389,64 @@ function initUploadZone() {
         if (e.target.files.length > 0) {
             selectedFile = e.target.files[0];
             document.getElementById('selected-file').textContent = `Selected: ${selectedFile.name}`;
+            analyzeSyllabusMetadata(selectedFile);
         }
     });
+}
+
+async function analyzeSyllabusMetadata(file) {
+    if (!file) return;
+
+    // Show a subtle loading state in the dropdowns
+    const branchTrigger = document.getElementById('upload-branch').closest('.custom-select')?.querySelector('.trigger-text');
+    const semTrigger = document.getElementById('upload-semester').closest('.custom-select')?.querySelector('.trigger-text');
+    
+    if (branchTrigger) branchTrigger.textContent = 'Auto-detecting...';
+    if (semTrigger) semTrigger.textContent = '...';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const response = await fetch(`${API_BASE_V2}/analyze-pdf`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (data.branch) {
+                const select = document.getElementById('upload-branch');
+                const custom = select.closest('.custom-select')._customSelect;
+                if (custom) custom.setValue(data.branch.toUpperCase());
+            }
+            
+            if (data.semester) {
+                const select = document.getElementById('upload-semester');
+                const custom = select.closest('.custom-select')._customSelect;
+                if (custom) custom.setValue(data.semester.toString());
+            }
+            
+            if (data.regulation) {
+                const select = document.getElementById('upload-regulation');
+                const custom = select.closest('.custom-select')._customSelect;
+                if (custom) custom.setValue(data.regulation);
+            }
+            
+            if (data.confidence > 0.5) {
+                showToast(`Auto-detected: ${data.branch} S${data.semester} (${data.regulation})`, 'success');
+            }
+        }
+    } catch (error) {
+        console.error('Error analyzing metadata:', error);
+    } finally {
+        // Restore triggers if analysis failed or finished
+        if (branchTrigger && branchTrigger.textContent === 'Auto-detecting...') {
+            const select = document.getElementById('upload-branch');
+            branchTrigger.textContent = select.options[select.selectedIndex].text;
+        }
+    }
 }
 
 function initUploadForm() {

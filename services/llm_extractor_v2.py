@@ -7,6 +7,7 @@ import re
 import logging
 import time
 import threading
+import concurrent.futures
 from typing import Optional, List, Dict, Any
 from app.config import settings
 
@@ -117,6 +118,35 @@ class LLMExtractorV2:
         except Exception as e:
             logger.warning(f"Could not initialize OpenAI: {e}")
     
+    def analyze_syllabus_metadata(self, first_page_text: str) -> dict:
+        """
+        Analyze the first page of a syllabus to extract metadata
+        """
+        prompt = f"""You are a KTU syllabus metadata extractor. Analyze the provided text from the first page of a syllabus and extract the following:
+1. Branch (e.g., CSE, ECE, ME, CE, AI, DS, etc.)
+2. Semester (1 to 8)
+3. Regulation (Year of introduction, e.g., 2019, 2024)
+
+SYLLABUS TEXT (FIRST PAGE):
+{first_page_text}
+
+Return ONLY valid JSON:
+{{
+    "branch": "CSE",
+    "semester": 3,
+    "regulation": "2019",
+    "confidence": 0.95
+}}
+
+If you cannot find a field, use null.
+"""
+        try:
+            response = self._call_llm(prompt)
+            return self._parse_json_response(response)
+        except Exception as e:
+            logger.warning(f"Could not extract metadata: {e}")
+            return {"branch": None, "semester": None, "regulation": "2019", "confidence": 0}
+
     def extract_syllabus_structure(
         self, 
         raw_text: str, 
@@ -587,21 +617,32 @@ Recommended Textbooks and References:
         regulation: str,
         chunk_size: int
     ) -> dict:
-        """Process large text in chunks"""
+        """Process large text in chunks in parallel"""
         chunks = [raw_text[i:i + chunk_size] for i in range(0, len(raw_text), chunk_size - 1000)]
         
         all_subjects = []
         all_concepts = []
-        all_relationships = []
-        all_content_chunks = []
         seen_codes = set()
         
-        for i, chunk in enumerate(chunks):
+        logger.info(f"Processing {len(chunks)} chunks in parallel")
+        
+        def process_single_chunk(i, chunk):
             logger.info(f"Processing chunk {i + 1}/{len(chunks)}")
             try:
                 raw_structure = self._extract_verbatim_structure(chunk, semester, branch)
                 normalized = self._normalize_to_atomic_concepts(raw_structure)
-                
+                return normalized
+            except Exception as e:
+                logger.warning(f"Error processing chunk {i + 1}: {e}")
+                return None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(process_single_chunk, i, chunk) for i, chunk in enumerate(chunks)]
+            for future in concurrent.futures.as_completed(futures):
+                normalized = future.result()
+                if not normalized:
+                    continue
+                    
                 for subject in normalized.get("subjects", []):
                     if subject["code"] not in seen_codes:
                         all_subjects.append(subject)
@@ -615,10 +656,6 @@ Recommended Textbooks and References:
                                 existing.setdefault("modules", []).append(module)
                 
                 all_concepts.extend(normalized.get("concepts", []))
-                
-            except Exception as e:
-                logger.warning(f"Error processing chunk {i + 1}: {e}")
-                continue
         
         # Extract relationships from all concepts
         if all_concepts:

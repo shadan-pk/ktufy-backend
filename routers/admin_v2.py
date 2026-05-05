@@ -5,6 +5,7 @@ API endpoints for managing KG-RAG system with proper ontology
 import os
 import shutil
 import logging
+import uuid
 from typing import Optional, List
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Query
@@ -172,6 +173,39 @@ async def get_statistics():
 # ═══════════════════════════════════════════════════════════════════════════════
 # PDF Upload & Processing (V2)
 # ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/analyze-pdf", summary="Analyze syllabus PDF for metadata (V2)")
+async def analyze_pdf(
+    file: UploadFile = File(..., description="Syllabus PDF file")
+):
+    """
+    Extract metadata (branch, semester, regulation) from the first page of a PDF
+    """
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+    
+    # Save temporary file for analysis
+    temp_path = f"temp_{uuid.uuid4()}.pdf"
+    try:
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Extract first page text
+        from services.pdf_processor import pdf_processor
+        first_page_text = pdf_processor.extract_text_by_pages(temp_path, start_page=0, end_page=1)
+        
+        # Analyze with LLM
+        from services.llm_extractor_v2 import llm_extractor
+        metadata = llm_extractor.analyze_syllabus_metadata(first_page_text)
+        
+        return metadata
+    except Exception as e:
+        logger.error(f"Error analyzing PDF: {e}")
+        return {"branch": None, "semester": None, "regulation": "2019", "confidence": 0}
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
 
 @router.post("/upload", response_model=SyllabusUploadResponseV2, summary="Upload syllabus PDF (V2)")
 async def upload_syllabus(
