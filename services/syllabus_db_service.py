@@ -245,8 +245,18 @@ class SyllabusDBService:
 
             subjects = []
             for row in result.data:
-                # Get module count
-                mod_result = client.table("syllabus_modules").select("id", count="exact").eq("subject_code", row["code"]).eq("regulation", row["regulation"]).execute()
+                # Get module count - robustly handle space mismatches
+                code_no_space = row["code"].replace(" ", "")
+                code_with_space = row["code"] if " " in row["code"] else f"{row['code'][:3]} {row['code'][3:]}"
+                reg_val = row.get("regulation") or "2019"
+
+                mod_result = (
+                    client.table("syllabus_modules")
+                    .select("id", count="exact")
+                    .eq("regulation", reg_val)
+                    .or_(f"subject_code.eq.{row['code']},subject_code.eq.{code_no_space},subject_code.eq.{code_with_space}")
+                    .execute()
+                )
                 row["module_count"] = mod_result.count if mod_result.count is not None else 0
                 
                 # Use mapped_elective from view if present
