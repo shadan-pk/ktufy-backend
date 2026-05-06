@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 def _to_iso(value):
     if isinstance(value, datetime):
         return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _to_iso(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_to_iso(v) for v in value]
     return value
 
 

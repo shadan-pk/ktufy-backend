@@ -267,22 +267,25 @@ IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semeste
             if validated:
                 logger.info(f"[LLM_EXTRACT] Sample validated courses: {[v['subject_code'] + '→' + v['program_elective'] for v in validated[:5]]}")
 
-            # Fallback: supplement with table-based extraction if some electives are missing
+            # Fallback: supplement with table-based extraction ONLY if LLM found nothing
+            # or very few results, as the table extractor can be noisy.
             try:
-                table_mappings = []
-                if pdf_path:
+                if pdf_path and len(validated) < 10:
+                    logger.info(f"[LLM_EXTRACT] LLM found only {len(validated)} mappings. Running table fallback...")
                     table_mappings = self._extract_from_tables(pdf_path)
                     logger.info(f"[TABLE_EXTRACT] Found {len(table_mappings)} mappings from tables")
 
-                # Merge table mappings if they are not already present
-                existing_codes = {m['subject_code'] for m in validated}
-                for tm in table_mappings:
-                    if tm['subject_code'] not in existing_codes and tm['program_elective'] in valid_pec_values:
-                        validated.append(tm)
-                        existing_codes.add(tm['subject_code'])
+                    # Merge table mappings if they are not already present
+                    existing_codes = {m['subject_code'] for m in validated}
+                    for tm in table_mappings:
+                        if tm['subject_code'] not in existing_codes and tm['program_elective'] in valid_pec_values:
+                            validated.append(tm)
+                            existing_codes.add(tm['subject_code'])
 
-                if table_mappings:
-                    logger.info(f"[LLM_EXTRACT] After table supplement validated count: {len(validated)}")
+                    if table_mappings:
+                        logger.info(f"[LLM_EXTRACT] After table supplement validated count: {len(validated)}")
+                else:
+                    logger.info(f"[LLM_EXTRACT] LLM found {len(validated)} mappings. Skipping table fallback to avoid duplicates.")
             except Exception as e:
                 logger.warning(f"[TABLE_EXTRACT] Table extraction failed: {e}")
 
@@ -380,77 +383,93 @@ IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semeste
         Returns list of mapping dicts: subject_code, subject_name, program_elective, semester, credits
         """
         results: List[Dict[str, Any]] = []
+        # KTU Core Course Slots
+        PCC_SLOTS = {"A", "B", "C", "D", "E", "F", "S", "T", "R", "M", "H", "R/M"}
+        
         try:
             tables = pdf_processor.extract_tables_with_pages(pdf_path)
             for page_num, table in tables:
                 # Get the page text to check context
                 page_text = pdf_processor.extract_text_by_pages(pdf_path, start_page=page_num-1, end_page=page_num)
                 up = page_text.upper() if page_text else ""
+                
+                # If page doesn't mention electives, skip all tables on it
                 if "PROGRAM ELECTIVE" not in up and "OPEN ELECTIVE" not in up and "OEC" not in up:
                     continue
 
                 # table is a list of rows; try to pull course codes from each row
                 for row in table:
-                    # row may contain columns like ['SLOT','COURSE NO.','COURSES',...]
                     if not row or len(row) < 2:
                         continue
-                    # find a cell that matches course code pattern
+                        
+                    # 1. Skip rows that look like PCC (Core) courses.
+                    # Core tables always have a SLOT (A, B, C, D, etc.)
+                    is_pcc = False
+                    for cell in row:
+                        if cell and str(cell).strip().upper() in PCC_SLOTS:
+                            is_pcc = True
+                            break
+                    if is_pcc:
+                        continue
+
+                    # 2. Find subject code
                     subject_code = None
                     subject_name = None
                     for cell in row:
                         if not cell:
                             continue
                         cell_str = str(cell).strip()
-                        # match patterns like CST 312 or CST312
                         m = re.search(r"\b([A-Z]{2,4})\s*(\d{3,4})\b", cell_str)
                         if m:
                             subject_code = (m.group(1) + m.group(2)).upper()
                             break
-                    # subject name: try next columns
-                    if subject_code:
-                        # subject_name is usually in the next cell after course no.
-                        # collect any non-code text in row
-                        names = []
-                        for cell in row:
-                            if not cell:
-                                continue
-                            s = str(cell).strip()
-                            if subject_code.replace(' ', '') in s.replace(' ', ''):
-                                continue
-                            if re.search(r"\b([A-Z]{2,4})\s*(\d{3,4})\b", s):
-                                continue
-                            if len(s) > 1:
-                                names.append(s)
-                        subject_name = names[0] if names else ""
+                    
+                    if not subject_code:
+                        continue
 
-                        # determine program elective type from page_text
-                        pe = None
-                        if "PROGRAM ELECTIVE I" in up:
-                            pe = "PEC1"
-                        elif "PROGRAM ELECTIVE II" in up:
-                            pe = "PEC2"
-                        elif "PROGRAM ELECTIVE III" in up:
-                            pe = "PEC3"
-                        elif "PROGRAM ELECTIVE IV" in up:
-                            pe = "PEC4"
-                        elif "PROGRAM ELECTIVE V" in up:
-                            pe = "PEC5"
-                        elif "OPEN ELECTIVE" in up or "OEC" in up:
-                            pe = "OEC"
+                    # 3. Find subject name (usually the next significant string)
+                    names = []
+                    for cell in row:
+                        if not cell:
+                            continue
+                        s = str(cell).strip()
+                        # Skip if it's the code itself or another code
+                        if subject_code in s.replace(' ', ''):
+                            continue
+                        if re.search(r"\b([A-Z]{2,4})\s*(\d{3,4})\b", s):
+                            continue
+                        # Skip if it's a credit or number
+                        if s.isdigit() or (s.replace('.', '').isdigit()):
+                            continue
+                        if len(s) > 1:
+                            names.append(s)
+                    subject_name = names[0] if names else ""
 
-                        # semester: look for 'SEMESTER <n>' nearby
-                        sem = None
-                        m2 = re.search(r"SEMESTER\s*(\d)", up)
-                        if m2:
-                            sem = int(m2.group(1))
+                    # 4. Determine elective type (much more carefully)
+                    # We look for the heading most likely to be ABOVE this specific table
+                    # For now, we use a simple heuristic: if PEC1 is on page, assume PEC1
+                    # but we already filtered PCC courses above which was the main issue.
+                    pe = None
+                    if "PROGRAM ELECTIVE I" in up: pe = "PEC1"
+                    elif "PROGRAM ELECTIVE II" in up: pe = "PEC2"
+                    elif "PROGRAM ELECTIVE III" in up: pe = "PEC3"
+                    elif "PROGRAM ELECTIVE IV" in up: pe = "PEC4"
+                    elif "PROGRAM ELECTIVE V" in up: pe = "PEC5"
+                    elif "OPEN ELECTIVE" in up or "OEC" in up: pe = "OEC"
 
-                        results.append({
-                            "subject_code": subject_code,
-                            "subject_name": subject_name,
-                            "program_elective": pe or "",
-                            "semester": sem,
-                            "credits": None,
-                        })
+                    # 5. Semester
+                    sem = None
+                    m2 = re.search(r"SEMESTER\s*(\d)", up)
+                    if m2:
+                        sem = int(m2.group(1))
+
+                    results.append({
+                        "subject_code": subject_code,
+                        "subject_name": subject_name,
+                        "program_elective": pe or "",
+                        "semester": sem,
+                        "credits": None,
+                    })
         except Exception as e:
             logger.warning(f"[TABLE_EXTRACT] Error extracting tables: {e}")
 
