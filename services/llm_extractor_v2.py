@@ -213,6 +213,7 @@ CONTEXT:
 - Semester: {semester}
 - Branch: {branch}
 - University: KTU (Kerala Technological University)
+- Subject Code Format: MUST start with at least 3 letters (e.g., CST201, MAT101, ECT302). Do NOT use 2-letter codes like CS201.
 
 SYLLABUS TEXT:
 {text}
@@ -271,8 +272,15 @@ IMPORTANT: Return ONLY the JSON. Copy text VERBATIM from syllabus. The 'category
         normalized_subjects = []
         
         for subject in raw_data.get("subjects", []):
-            subject_code = str(subject.get("code", "")).strip()
+            subject_code = str(subject.get("code", "")).strip().upper()
             subject_name = str(subject.get("name", "")).strip()
+            
+            # Validation: Block codes that don't have at least 3 letters (e.g., block CS201, allow CST201)
+            # KTU codes are typically LLLNNN (e.g. CST201)
+            if not re.match(r'^[A-Z]{3,}\d*', subject_code):
+                logger.warning(f"Blocking invalid subject code format: {subject_code} (Requires at least 3 letters)")
+                continue
+
             if not subject_code or not subject_name:
                 logger.warning("Skipping subject with missing code/name: %s", subject)
                 continue
