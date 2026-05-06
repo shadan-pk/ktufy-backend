@@ -354,10 +354,16 @@ async def extract_curriculum(
     # Save temporary file
     temp_path = f"temp_curriculum_{uuid.uuid4()}.pdf"
     try:
+        logger.info(f"[CURRICULUM] Starting extraction for {file.filename}")
+        logger.info(f"[CURRICULUM] Branch: {branch}, Regulation: {regulation}")
+        
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        logger.info(f"Extracting curriculum mappings from {file.filename} for {branch}/{regulation}")
+        file_size = os.path.getsize(temp_path)
+        logger.info(f"[CURRICULUM] Saved temp file: {temp_path} ({file_size} bytes)")
+        
+        logger.info(f"[CURRICULUM] Extracting curriculum mappings from {file.filename}")
         
         # Extract mappings from PDF
         extraction_result = curriculum_extractor.extract_elective_mappings_from_pdf(
@@ -366,27 +372,44 @@ async def extract_curriculum(
             regulation
         )
         
+        logger.info(f"[CURRICULUM] Extraction result: success={extraction_result.get('success')}, mappings_count={len(extraction_result.get('mappings', []))}")
+        
+        if extraction_result.get("errors"):
+            logger.warning(f"[CURRICULUM] Extraction errors: {extraction_result.get('errors')}")
+        
         if not extraction_result.get("success") or not extraction_result.get("mappings"):
-            raise HTTPException(
-                status_code=400, 
-                detail="No mappings could be extracted from the PDF. Check file format."
-            )
+            error_detail = "No mappings could be extracted from the PDF. Check file format or PDF content."
+            if extraction_result.get("errors"):
+                error_detail += f" Errors: {'; '.join(extraction_result.get('errors'))}"
+            logger.warning(f"[CURRICULUM] {error_detail}")
+            raise HTTPException(status_code=400, detail=error_detail)
         
         mappings = extraction_result.get("mappings", [])
-        logger.info(f"Extracted {len(mappings)} mappings from curriculum PDF")
+        logger.info(f"[CURRICULUM] Successfully extracted {len(mappings)} mappings from curriculum PDF")
         
         # Populate database
-        if supabase_admin_client:
-            stats = curriculum_extractor.populate_elective_mappings(
-                supabase_admin_client,
-                mappings,
-                branch,
-                regulation
-            )
-            inserted_count = stats.get("inserted", 0)
-            logger.info(f"Upserted {inserted_count} mappings into database (inserted: {stats.get('inserted')}, updated: {stats.get('updated')}, skipped: {stats.get('skipped')})")
-        else:
+        if not supabase_admin_client:
+            logger.error("[CURRICULUM] Supabase admin client not configured")
             raise HTTPException(status_code=500, detail="Supabase admin client not configured")
+        
+        logger.info(f"[CURRICULUM] Populating {len(mappings)} mappings into database")
+        stats = curriculum_extractor.populate_elective_mappings(
+            supabase_admin_client,
+            mappings,
+            branch,
+            regulation
+        )
+        
+        inserted_count = stats.get("inserted", 0)
+        updated_count = stats.get("updated", 0)
+        skipped_count = stats.get("skipped", 0)
+        
+        logger.info(f"[CURRICULUM] Database stats: inserted={inserted_count}, updated={updated_count}, skipped={skipped_count}")
+        
+        if stats.get("errors"):
+            logger.warning(f"[CURRICULUM] Database errors: {stats.get('errors')}")
+        
+        logger.info(f"[CURRICULUM] Extraction complete: {inserted_count} inserted, {updated_count} updated")
         
         return CurriculumExtractionResponse(
             status="success",
@@ -398,15 +421,21 @@ async def extract_curriculum(
             timestamp=datetime.utcnow()
         )
     
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        logger.error("[CURRICULUM] HTTPException raised, re-raising")
+        raise
+    
     except Exception as e:
-        logger.error(f"Error extracting curriculum: {e}", exc_info=True)
+        logger.error(f"[CURRICULUM] Unexpected error: {type(e).__name__}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500, 
-            detail=f"Error extracting curriculum mappings: {str(e)}"
+            detail=f"Error extracting curriculum mappings: {type(e).__name__}: {str(e)}"
         )
     
     finally:
         if os.path.exists(temp_path):
+            logger.info(f"[CURRICULUM] Cleaning up temp file: {temp_path}")
             os.remove(temp_path)
 
 
