@@ -59,7 +59,7 @@ class CurriculumExtractor:
             
             # Step 2: Use LLM to parse curriculum structure
             logger.info("[EXTRACTOR] Step 2: Parsing with LLM")
-            mappings = self._extract_mappings_with_llm(processed_text, branch, regulation)
+            mappings = self._extract_mappings_with_llm(processed_text, branch, regulation, pdf_path)
             logger.info(f"[EXTRACTOR] LLM returned {len(mappings)} mappings")
             
             result["mappings"] = mappings
@@ -122,7 +122,7 @@ class CurriculumExtractor:
         
         return processed
     
-    def _extract_mappings_with_llm(self, raw_text: str, branch: str, regulation: str) -> List[Dict[str, Any]]:
+    def _extract_mappings_with_llm(self, raw_text: str, branch: str, regulation: str, pdf_path: Optional[str] = None) -> List[Dict[str, Any]]:
         """Use LLM to parse curriculum and extract elective group mappings
         
         The curriculum PDF structure:
@@ -265,7 +265,26 @@ IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semeste
             
             if validated:
                 logger.info(f"[LLM_EXTRACT] Sample validated courses: {[v['subject_code'] + '→' + v['program_elective'] for v in validated[:5]]}")
-            
+
+            # Fallback: supplement with table-based extraction if some electives are missing
+            try:
+                table_mappings = []
+                if pdf_path:
+                    table_mappings = self._extract_from_tables(pdf_path)
+                    logger.info(f"[TABLE_EXTRACT] Found {len(table_mappings)} mappings from tables")
+
+                # Merge table mappings if they are not already present
+                existing_codes = {m['subject_code'] for m in validated}
+                for tm in table_mappings:
+                    if tm['subject_code'] not in existing_codes and tm['program_elective'] in valid_pec_values:
+                        validated.append(tm)
+                        existing_codes.add(tm['subject_code'])
+
+                if table_mappings:
+                    logger.info(f"[LLM_EXTRACT] After table supplement validated count: {len(validated)}")
+            except Exception as e:
+                logger.warning(f"[TABLE_EXTRACT] Table extraction failed: {e}")
+
             return validated
             
         except Exception as e:
@@ -331,6 +350,88 @@ IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semeste
             stats["errors"].append(error_msg)
         
         return stats
+
+    def _extract_from_tables(self, pdf_path: str) -> List[Dict[str, Any]]:
+        """Extract mappings from PDF tables near PROGRAM ELECTIVE or OPEN ELECTIVE headings.
+
+        Returns list of mapping dicts: subject_code, subject_name, program_elective, semester, credits
+        """
+        results: List[Dict[str, Any]] = []
+        try:
+            tables = pdf_processor.extract_tables_with_pages(pdf_path)
+            for page_num, table in tables:
+                # Get the page text to check context
+                page_text = pdf_processor.extract_text_by_pages(pdf_path, start_page=page_num-1, end_page=page_num)
+                up = page_text.upper() if page_text else ""
+                if "PROGRAM ELECTIVE" not in up and "OPEN ELECTIVE" not in up and "OEC" not in up:
+                    continue
+
+                # table is a list of rows; try to pull course codes from each row
+                for row in table:
+                    # row may contain columns like ['SLOT','COURSE NO.','COURSES',...]
+                    if not row or len(row) < 2:
+                        continue
+                    # find a cell that matches course code pattern
+                    subject_code = None
+                    subject_name = None
+                    for cell in row:
+                        if not cell:
+                            continue
+                        cell_str = str(cell).strip()
+                        # match patterns like CST 312 or CST312
+                        m = __import__('re').search(r"\b([A-Z]{2,4})\s*(\d{3,4})\b", cell_str)
+                        if m:
+                            subject_code = (m.group(1) + m.group(2)).upper()
+                            break
+                    # subject name: try next columns
+                    if subject_code:
+                        # subject_name is usually in the next cell after course no.
+                        # collect any non-code text in row
+                        names = []
+                        for cell in row:
+                            if not cell:
+                                continue
+                            s = str(cell).strip()
+                            if subject_code.replace(' ', '') in s.replace(' ', ''):
+                                continue
+                            if __import__('re').search(r"\b([A-Z]{2,4})\s*(\d{3,4})\b", s):
+                                continue
+                            if len(s) > 1:
+                                names.append(s)
+                        subject_name = names[0] if names else ""
+
+                        # determine program elective type from page_text
+                        pe = None
+                        if "PROGRAM ELECTIVE I" in up:
+                            pe = "PEC1"
+                        elif "PROGRAM ELECTIVE II" in up:
+                            pe = "PEC2"
+                        elif "PROGRAM ELECTIVE III" in up:
+                            pe = "PEC3"
+                        elif "PROGRAM ELECTIVE IV" in up:
+                            pe = "PEC4"
+                        elif "PROGRAM ELECTIVE V" in up:
+                            pe = "PEC5"
+                        elif "OPEN ELECTIVE" in up or "OEC" in up:
+                            pe = "OEC"
+
+                        # semester: look for 'SEMESTER <n>' nearby
+                        sem = None
+                        m2 = __import__('re').search(r"SEMESTER\s*(\d)", up)
+                        if m2:
+                            sem = int(m2.group(1))
+
+                        results.append({
+                            "subject_code": subject_code,
+                            "subject_name": subject_name,
+                            "program_elective": pe or "",
+                            "semester": sem,
+                            "credits": None,
+                        })
+        except Exception as e:
+            logger.warning(f"[TABLE_EXTRACT] Error extracting tables: {e}")
+
+        return results
 
 
 # Global instance

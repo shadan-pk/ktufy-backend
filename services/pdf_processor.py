@@ -150,6 +150,21 @@ class PDFProcessor:
                     all_tables.extend(tables)
         
         return all_tables
+
+    def extract_tables_with_pages(self, pdf_path: str) -> list:
+        """
+        Extract tables from PDF and return them with page numbers.
+
+        Returns: list of tuples (page_number, table)
+        """
+        tables_with_pages = []
+        with self.pdfplumber.open(pdf_path) as pdf:
+            for i, page in enumerate(pdf.pages):
+                tables = page.extract_tables()
+                if tables:
+                    for table in tables:
+                        tables_with_pages.append((i + 1, table))
+        return tables_with_pages
     
     def get_pdf_info(self, pdf_path: str) -> dict:
         """
