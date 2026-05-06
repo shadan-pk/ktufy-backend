@@ -392,7 +392,7 @@ async def extract_curriculum(
             message="Queued for background curriculum extraction",
         )
 
-        return CurriculumExtractionResponse(
+        payload = CurriculumExtractionResponse(
             status="queued",
             message="Curriculum extraction queued in the worker",
             job_id=job_row["id"],
@@ -400,6 +400,7 @@ async def extract_curriculum(
             regulation=regulation,
             timestamp=datetime.utcnow()
         )
+        return JSONResponse(status_code=202, content=payload.dict())
     
     except HTTPException:
         # Re-raise HTTP exceptions as-is

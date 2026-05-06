@@ -330,17 +330,39 @@ IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semeste
             logger.info(f"[DB_POPULATE] Prepared {len(rows)} rows for upsert (skipped: {stats['skipped']})")
             
             if rows:
-                logger.info(f"[DB_POPULATE] Executing upsert for {len(rows)} rows")
-                # Upsert all mappings
-                result = (
-                    admin_client.table("syllabus_elective_mappings")
-                    .upsert(rows, on_conflict="subject_code,regulation")
-                    .execute()
-                )
-                
-                logger.info(f"[DB_POPULATE] Upsert result: {len(result.data) if result.data else 0} rows affected")
-                stats["inserted"] = len(result.data) if result.data else 0
-                logger.info(f"[DB_POPULATE] Successfully upserted {stats['inserted']} elective mappings")
+                logger.info(f"[DB_POPULATE] Executing safe upsert for {len(rows)} rows (per-row checks)")
+                for r in rows:
+                    try:
+                        # Check existing mapping
+                        existing = (
+                            admin_client.table("syllabus_elective_mappings")
+                            .select("id,program_elective")
+                            .eq("subject_code", r["subject_code"]) 
+                            .eq("regulation", r["regulation"]) 
+                            .execute()
+                        )
+                        existing_row = existing.data[0] if existing and existing.data else None
+
+                        if existing_row:
+                            # If program_elective is same, skip
+                            if str(existing_row.get("program_elective", "")).upper() == str(r.get("program_elective", "")).upper():
+                                logger.debug(f"[DB_POPULATE] Skipping upsert for {r['subject_code']} — no change")
+                                stats["skipped"] += 1
+                                continue
+                            # Otherwise update
+                            admin_client.table("syllabus_elective_mappings").update({
+                                "program_elective": r.get("program_elective", "")
+                            }).eq("id", existing_row["id"]).execute()
+                            stats["updated"] += 1
+                            logger.debug(f"[DB_POPULATE] Updated {r['subject_code']} -> {r.get('program_elective')}")
+                        else:
+                            # Insert new row
+                            admin_client.table("syllabus_elective_mappings").insert(r).execute()
+                            stats["inserted"] += 1
+                            logger.debug(f"[DB_POPULATE] Inserted {r['subject_code']} -> {r.get('program_elective')}")
+                    except Exception as e:
+                        logger.warning(f"[DB_POPULATE] Failed to upsert {r.get('subject_code')}: {e}")
+                        stats["errors"].append(str(e))
             else:
                 logger.warning("[DB_POPULATE] No valid rows to upsert after filtering")
             

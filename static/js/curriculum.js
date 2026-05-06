@@ -92,35 +92,47 @@ async function extractCurriculum() {
             body: formData
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `HTTP ${response.status}`);
-        }
+        // Accept 202 (queued) or 200 (legacy). Treat 202 as queued.
+        if (response.status === 202 || response.ok) {
+            const data = await response.json().catch(() => ({}));
 
-        const data = await response.json();
-
-        resultContent.innerHTML = `
-            <div class="alert alert-info" style="margin-bottom: 1rem;">
-                <div style="display: flex; gap: 0.75rem;">
-                    <i data-lucide="clock-3" style="width: 20px; height: 20px; flex-shrink: 0; color: var(--info);"></i>
-                    <div>
-                        <div style="font-weight: 600; margin-bottom: 0.25rem;">Extraction Queued</div>
-                        <div style="font-size: 0.875rem; color: var(--muted-foreground);">
-                            ${escapeHtml(data.message || 'Queued for background processing')}
+            // Show queued UI; avoid rendering undefined counts
+            resultContent.innerHTML = `
+                <div class="alert alert-info" style="margin-bottom: 1rem;">
+                    <div style="display: flex; gap: 0.75rem;">
+                        <i data-lucide="clock-3" style="width: 20px; height: 20px; flex-shrink: 0; color: var(--info);"></i>
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Extraction Queued</div>
+                            <div style="font-size: 0.875rem; color: var(--muted-foreground);">
+                                ${escapeHtml(data.message || 'Queued for background processing')}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="card">
-                <div class="card-body">
-                    <div style="font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 0.5rem;">Job ID</div>
-                    <div style="font-family: monospace; word-break: break-all;">${escapeHtml(data.job_id)}</div>
+                <div class="card">
+                    <div class="card-body">
+                        <div style="font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 0.5rem;">Job ID</div>
+                        <div style="font-family: monospace; word-break: break-all;">${escapeHtml(data.job_id || '')}</div>
+                    </div>
                 </div>
-            </div>
-            <div id="curriculum-job-status" class="text-sm text-muted" style="margin-top: 1rem;">
-                Waiting for worker to finish...
-            </div>
-        `;
+                <div id="curriculum-job-status" class="text-sm text-muted" style="margin-top: 1rem;">
+                    Waiting for worker to finish...
+                </div>
+            `;
+
+            resultContainer.style.display = 'block';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            showToast('Curriculum extraction queued. The worker will process it in the background.', 'info');
+
+            if (data.job_id) await pollCurriculumJob(data.job_id, resultContent);
+
+            fileInput.value = '';
+            document.getElementById('curriculum-file-name').textContent = 'No file selected';
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `HTTP ${response.status}`);
+        }
 
         resultContainer.style.display = 'block';
 
