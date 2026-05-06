@@ -230,7 +230,8 @@ class SyllabusDBService:
     ) -> List[dict]:
         """Get subjects list with optional filters."""
         try:
-            query = client.table("syllabus_subjects").select("*")
+            # Query the VIEW instead of the table for automatic elective resolution
+            query = client.table("subjects_with_electives").select("*")
 
             if branch:
                 query = query.eq("branch", branch)
@@ -242,34 +243,18 @@ class SyllabusDBService:
             query = query.order("semester").order("code")
             result = query.execute()
 
-            # Fetch all elective mappings for this regulation to avoid N+1 queries
-            elective_mappings = {}
-            try:
-                reg_val = regulation or "2019"
-                map_res = client.table("syllabus_elective_mappings").select("subject_code, program_elective").eq("regulation", reg_val).execute()
-                for m in map_res.data:
-                    # Store as uppercase for case-insensitive matching
-                    elective_mappings[m["subject_code"].upper()] = m["program_elective"]
-                logger.info(f"📚 [Syllabus] Loaded {len(elective_mappings)} elective mappings from DB for regulation {reg_val}")
-                if elective_mappings:
-                    sample = dict(list(elective_mappings.items())[:5])
-                    logger.info(f"📚 [Syllabus] Sample Mappings: {sample}")
-            except Exception as e:
-                logger.warning(f"Failed to fetch elective mappings: {e}")
-
             subjects = []
             for row in result.data:
                 # Get module count
                 mod_result = client.table("syllabus_modules").select("id", count="exact").eq("subject_code", row["code"]).eq("regulation", row["regulation"]).execute()
                 row["module_count"] = mod_result.count if mod_result.count is not None else 0
                 
-                # Dynamic resolution from syllabus_elective_mappings
-                mapping = elective_mappings.get(row["code"].upper())
-                if mapping:
-                    row["program_elective"] = mapping
-                    # Override category for granular grouping (e.g. PEC -> PEC1)
-                    row["category"] = mapping
-                elif not row.get("program_elective"):
+                # Use mapped_elective from view if present
+                val = row.get("mapped_elective")
+                if val:
+                    row["program_elective"] = val
+                    row["category"] = val
+                else:
                     row["program_elective"] = ""
                         
                 subjects.append(row)
@@ -286,25 +271,19 @@ class SyllabusDBService:
         Handles code with/without spaces (e.g. "CST201" vs "CST 201").
         """
         try:
-            # Try exact match first
+            # Try exact match on the VIEW
             result = (
-                client.table("syllabus_subjects")
+                client.table("subjects_with_electives")
                 .select("*")
                 .eq("code", subject_code)
                 .eq("regulation", regulation)
                 .execute()
             )
 
-            # Try without spaces
+            # Try without spaces fallback
             if not result.data:
                 code_no_space = subject_code.replace(" ", "")
-                result = (
-                    client.table("syllabus_subjects")
-                    .select("*")
-                    .eq("regulation", regulation)
-                    .execute()
-                )
-                # Filter client-side for space-insensitive match
+                result = client.table("subjects_with_electives").select("*").eq("regulation", regulation).execute()
                 result.data = [
                     r for r in result.data
                     if r["code"].replace(" ", "").upper() == code_no_space.upper()
@@ -315,24 +294,13 @@ class SyllabusDBService:
 
             subject = result.data[0]
 
-            # Dynamic resolution of program_elective and category
-            if subject.get("category") == "PEC" or subject.get("category") == "OEC":
-                try:
-                    code_upper = subject["code"].upper()
-                    mapping = client.table("syllabus_elective_mappings").select("program_elective").eq("subject_code", code_upper).eq("regulation", subject.get("regulation", "2019")).execute()
-                    if not mapping.data:
-                        # Try case-insensitive fallback if direct eq fails
-                        all_maps = client.table("syllabus_elective_mappings").select("subject_code, program_elective").execute()
-                        match = next((m for m in all_maps.data if m["subject_code"].upper() == code_upper), None)
-                        if match:
-                            subject["program_elective"] = match["program_elective"]
-                            subject["category"] = match["program_elective"]
-                    elif mapping.data:
-                        val = mapping.data[0]["program_elective"]
-                        subject["program_elective"] = val
-                        subject["category"] = val
-                except Exception:
-                    pass
+            # Use mapped_elective from view
+            val = subject.get("mapped_elective")
+            if val:
+                subject["program_elective"] = val
+                subject["category"] = val
+            else:
+                subject["program_elective"] = ""
 
             # Fetch modules
             mod_result = (
