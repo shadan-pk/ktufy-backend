@@ -51,7 +51,6 @@ class SyllabusDBService:
                 "regulation": regulation,
                 "credits": self._coerce_int(subject_data.get("credits")),
                 "category": subject_data.get("category", ""),
-                "program_elective": "",  # resolved by frontend via syllabus_elective_mappings
                 "hours_per_week": self._coerce_int(subject_data.get("hours_per_week")),
                 "course_outcomes": subject_data.get("course_outcomes", []),
                 "textbooks": subject_data.get("textbooks", []),
