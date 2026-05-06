@@ -78,7 +78,7 @@ class CurriculumExtractor:
         """
         Preprocess curriculum text to keep the most relevant parts.
         If text is very large (>50KB), extract sections around PROGRAM ELECTIVE
-        to help the LLM focus on the right content.
+        and OPEN ELECTIVE to help the LLM focus on the right content.
         Otherwise, return the full text.
         """
         if len(raw_text) < 50000:
@@ -87,17 +87,18 @@ class CurriculumExtractor:
         
         logger.info(f"[PREPROCESS] PDF is large ({len(raw_text)} chars), extracting relevant sections")
         
-        # Extract sections containing "PROGRAM ELECTIVE"
+        # Extract sections containing elective headings.
         lines = raw_text.split('\n')
         relevant_lines = []
         context_window = 100  # Keep 100 lines before/after each PROGRAM ELECTIVE
         
         pec_indices = []
         for i, line in enumerate(lines):
-            if "PROGRAM ELECTIVE" in line.upper():
+            upper_line = line.upper()
+            if "PROGRAM ELECTIVE" in upper_line or "OPEN ELECTIVE" in upper_line or upper_line.startswith("OEC"):
                 pec_indices.append(i)
         
-        logger.info(f"[PREPROCESS] Found {len(pec_indices)} PROGRAM ELECTIVE sections")
+        logger.info(f"[PREPROCESS] Found {len(pec_indices)} elective sections")
         
         # Include context around each PROGRAM ELECTIVE section
         indices_to_include = set()
@@ -128,8 +129,10 @@ class CurriculumExtractor:
         - Each SEMESTER X table contains courses with SLOT (A, B, C, D, E, F, S, T, R/M, H)
         - SLOT courses = PCC (core courses) - SKIP THESE
         - Below each semester, there are PROGRAM ELECTIVE I/II/III/IV/V sections
+        - Some semesters also contain OPEN ELECTIVE sections, usually labeled OPEN ELECTIVE or OEC
         - PROGRAM ELECTIVE I under Semester 6 = PEC1 for Semester 6
         - PROGRAM ELECTIVE II under Semester 7 = PEC2 for Semester 7
+        - OPEN ELECTIVE sections should be mapped to OEC
         - Extract only the PROGRAM ELECTIVE courses, not the SLOT courses
         """
         
@@ -149,18 +152,22 @@ Each semester has two parts:
    - PROGRAM ELECTIVE III in Sem 7 = PEC3 for Sem 7
    - PROGRAM ELECTIVE IV in Sem 8 = PEC4 for Sem 8
    - PROGRAM ELECTIVE V in Sem 8 = PEC5 for Sem 8
+3. OPEN ELECTIVE sections
+    - These may be labeled OPEN ELECTIVE, OEC, or OPEN ELECTIVE-I/II
+    - Extract all courses listed there and set program_elective to OEC
 
 EXTRACTION INSTRUCTIONS:
 1. Find each SEMESTER (1-8) section
 2. For each semester, find PROGRAM ELECTIVE I/II/III/IV/V subsections
-3. For each program elective section, extract ALL courses listed as options
-4. Map to PEC group based on:
+3. For OPEN ELECTIVE sections, extract ALL courses listed as options and mark them as OEC
+4. For each program elective section, extract ALL courses listed as options
+5. Map to PEC group based on:
    - If under "PROGRAM ELECTIVE I" → PEC1
    - If under "PROGRAM ELECTIVE II" → PEC2
    - If under "PROGRAM ELECTIVE III" → PEC3
    - If under "PROGRAM ELECTIVE IV" → PEC4
    - If under "PROGRAM ELECTIVE V" → PEC5
-5. DO NOT extract courses from the regular SEMESTER table (those have SLOT letters)
+6. DO NOT extract courses from the regular SEMESTER table (those have SLOT letters)
 
 BRANCH: {branch}
 REGULATION: {regulation}
@@ -195,10 +202,10 @@ Return ONLY a valid JSON array with NO markdown or code fences:
 
 VALIDATION RULES:
 1. Subject code must NOT be empty
-2. Program elective must be one of: PEC1, PEC2, PEC3, PEC4, PEC5, OEC
+2. Program elective must be one of: PEC1, PEC2, PEC3, PEC4, PEC5, OEC, MINOR, HONOURS
 3. Semester must be 1-8
 4. Do NOT include any PCC courses (those are in the main SEMESTER table with SLOT)
-5. Only include courses from PROGRAM ELECTIVE sections
+5. Only include courses from PROGRAM ELECTIVE sections or OPEN ELECTIVE sections
 
 IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semesters. Be thorough."""
 
@@ -230,6 +237,8 @@ IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semeste
                 
                 subject_code = str(m.get("subject_code", "")).strip().upper()
                 program_elective = str(m.get("program_elective", "")).strip().upper()
+                if program_elective in {"OPEN ELECTIVE", "OPEN_ELECTIVE", "OPEN-ELECTIVE", "OEC", "OE"}:
+                    program_elective = "OEC"
                 
                 # Skip if missing required fields
                 if not subject_code or not program_elective:

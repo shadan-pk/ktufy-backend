@@ -108,20 +108,23 @@ class PDFProcessor:
         Returns:
             Cleaned text
         """
-        # Remove excessive whitespace
-        text = re.sub(r'\s+', ' ', text)
+        # Preserve line structure so downstream parsers can detect tables/sections.
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+        lines = []
+        for line in text.split('\n'):
+            line = re.sub(r'[\t\x0b\x0c]+', ' ', line)
+            line = re.sub(r' {2,}', ' ', line).strip()
+            if line:
+                lines.append(line)
+
+        text = '\n'.join(lines)
         
         # Remove special characters that might cause issues
         text = text.replace('\x00', '')
         
         # Fix common OCR issues
         text = text.replace('|', 'I')  # Common OCR mistake
-        
-        # Normalize line breaks
-        text = text.replace('\r\n', '\n').replace('\r', '\n')
-        
-        # Remove excessive newlines
-        text = re.sub(r'\n{3,}', '\n\n', text)
         
         return text.strip()
     
