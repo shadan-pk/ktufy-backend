@@ -43,7 +43,7 @@ class SubjectDetail(BaseModel):
     subject_name: str = Field(..., description="Subject name")
     subject_code: str = Field(..., description="Subject code")
     credits: Optional[int] = Field(None, description="Credit hours")
-    semester: Optional[int] = Field(None, description="Semester number")
+    semester: Optional[int] = Field(None, description="Semestxx`")
     branch: Optional[str] = Field(None, description="Branch code")
     category: Optional[str] = Field(None, description="Subject category (e.g. PCC, PEC, OEC)")
     modules: List[ModuleItem] = Field(default_factory=list, description="Modules in this subject")
