@@ -481,6 +481,9 @@
                 <button class="nav-item" data-section="upload" onclick="showSection('upload')">
                     <i data-lucide="upload-cloud"></i> Upload Syllabus
                 </button>
+                <button class="nav-item" data-section="curriculum" onclick="showSection('curriculum')">
+                    <i data-lucide="book-marked"></i> Extract Curriculum
+                </button>
                 <button class="nav-item" data-section="subjects" onclick="showSection('subjects')">
                     <i data-lucide="book-open"></i> Subjects
                 </button>
@@ -680,6 +683,88 @@
                         <table>
                             <thead><tr><th>Filename</th><th>Branch</th><th>Semester</th><th>Size</th><th>Uploaded</th><th>Actions</th></tr></thead>
                             <tbody id="files-table"><tr><td class="td-empty" colspan="6">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Curriculum Extraction -->
+            <section id="curriculum-section" class="content-section">
+                <div class="page-header"><h2>Extract Curriculum Mappings</h2><p>Upload KTU curriculum PDFs to extract elective group mappings (PEC1-PEC5)</p></div>
+                
+                <div class="grid-2 gap-md mb-md">
+                    <div class="card">
+                        <div class="card-header"><h5>Upload Curriculum PDF</h5></div>
+                        <div class="card-body">
+                            <div class="upload-zone" id="curriculum-drop-zone" onclick="document.getElementById('curriculum-file-input').click()" style="cursor: pointer;">
+                                <input type="file" id="curriculum-file-input" accept=".pdf" hidden>
+                                <div class="upload-icon"><i data-lucide="book-marked" style="width:48px;height:48px"></i></div>
+                                <h5>Drag Curriculum PDF Here</h5>
+                                <p>or click to browse</p>
+                                <p class="text-sm text-muted mt-sm" id="curriculum-file-name">No file selected</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header"><h5>Configuration</h5></div>
+                        <div class="card-body">
+                            <div class="form-group mb-md">
+                                <label class="form-label">Branch</label>
+                                <div class="custom-select" data-id="curriculum-branch">
+                                    <select id="curriculum-branch">
+                                        <option value="">Select Branch...</option>
+                                        <option value="CSE">CSE (Computer Science)</option>
+                                        <option value="ECE">ECE (Electronics)</option>
+                                        <option value="EEE">EEE (Electrical)</option>
+                                        <option value="ME">ME (Mechanical)</option>
+                                        <option value="CE">CE (Civil)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Regulation</label>
+                                <div class="custom-select" data-id="curriculum-regulation">
+                                    <select id="curriculum-regulation">
+                                        <option value="2019">2019 Scheme</option>
+                                        <option value="2024">2024 Scheme</option>
+                                        <option value="2028">2028 Scheme</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-md">
+                    <div class="card-body">
+                        <div class="btn-group">
+                            <button class="btn btn-primary btn-lg" id="extract-curriculum-btn" onclick="extractCurriculum()" disabled>
+                                <span class="spinner" style="display:none"></span>
+                                <span class="btn-text"><i data-lucide="zap"></i> Extract Mappings</span>
+                            </button>
+                            <button class="btn btn-outline" onclick="document.getElementById('curriculum-file-input').value=''; document.getElementById('curriculum-file-name').textContent='No file selected'; document.getElementById('extract-curriculum-btn').disabled=true;">
+                                <i data-lucide="x"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="curriculum-result-container" style="display:none;" class="mb-md">
+                    <div class="card">
+                        <div class="card-header"><h5>Extraction Result</h5></div>
+                        <div class="card-body">
+                            <div id="curriculum-result-content"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h5>Stored Mappings</h5><button class="btn btn-ghost btn-sm" onclick="loadCurriculumMappings()"><i data-lucide="refresh-cw"></i> Refresh</button></div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Subject Code</th><th>Subject Name</th><th>Program Elective</th><th>Semester</th><th>Credits</th><th>Branch</th><th>Regulation</th></tr></thead>
+                            <tbody id="curriculum-mappings-table"><tr><td class="td-empty" colspan="7">Loading...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -914,6 +999,7 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="/static/js/admin.js"></script>
+    <script src="/static/js/curriculum.js"></script>
     <script src="/static/js/graph.js"></script>
     <script>lucide.createIcons();</script>
 </body>

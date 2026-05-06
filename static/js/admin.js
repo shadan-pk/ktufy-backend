@@ -201,6 +201,10 @@ function showSection(sectionName) {
         case 'upload':
             loadUploadedFiles();
             break;
+        case 'curriculum':
+            loadCurriculumMappings();
+            setupCurriculumFileInput();
+            break;
         case 'subjects':
             loadSubjects();
             break;

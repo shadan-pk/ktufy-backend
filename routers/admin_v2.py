@@ -16,6 +16,7 @@ from services.syllabus_processor_v2 import syllabus_processor
 from services.neo4j_service_v2 import neo4j_service
 from services.embedding_service_v2 import embedding_service
 from services.query_router import query_router
+from services.curriculum_extractor import curriculum_extractor
 from utils.supabase_client import supabase_admin_client
 from services.queue import get_queue
 from services.processing_worker import process_syllabus_job
@@ -108,6 +109,16 @@ class RelationshipCreate(BaseModel):
     from_concept_id: str
     to_concept_id: str
     relationship_type: str = Field(..., pattern="^(IS_A|PART_OF|PREREQUISITE_OF|USES|IMPLEMENTS|RELATED_TO)$")
+
+
+class CurriculumExtractionResponse(BaseModel):
+    status: str
+    message: str
+    mappings_extracted: int
+    mappings_inserted: int
+    branch: str
+    regulation: str
+    timestamp: datetime
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -305,6 +316,132 @@ async def upload_syllabus(
         message="File uploaded. Processing queued.",
         created_at=datetime.utcnow()
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Curriculum Extraction (V2)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/extract-curriculum", response_model=CurriculumExtractionResponse, summary="Extract curriculum mappings from PDF (V2)")
+async def extract_curriculum(
+    file: UploadFile = File(..., description="Curriculum PDF file"),
+    branch: str = Form(..., description="Branch code (CSE, ECE, etc.)"),
+    regulation: str = Form(default="2019", description="KTU regulation year (2019, 2024, 2028)")
+):
+    """
+    Extract elective group mappings from a curriculum PDF
+    
+    This endpoint:
+    1. Reads the curriculum PDF
+    2. Uses LLM to extract subject → elective group mappings
+    3. Validates and stores mappings in the database
+    4. Returns extraction statistics
+    
+    The mappings are stored in the syllabus_elective_mappings table and used
+    during syllabus processing to automatically assign program_elective values.
+    """
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+    
+    # Validate regulation
+    valid_regulations = ["2019", "2024", "2028"]
+    if regulation not in valid_regulations:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid regulation. Must be one of: {valid_regulations}"
+        )
+    
+    # Save temporary file
+    temp_path = f"temp_curriculum_{uuid.uuid4()}.pdf"
+    try:
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        logger.info(f"Extracting curriculum mappings from {file.filename} for {branch}/{regulation}")
+        
+        # Extract mappings from PDF
+        mappings = curriculum_extractor.extract_elective_mappings_from_pdf(
+            temp_path, 
+            branch, 
+            regulation
+        )
+        
+        if not mappings:
+            raise HTTPException(
+                status_code=400, 
+                detail="No mappings could be extracted from the PDF. Check file format."
+            )
+        
+        logger.info(f"Extracted {len(mappings)} mappings from curriculum PDF")
+        
+        # Populate database
+        if supabase_admin_client:
+            inserted_count = curriculum_extractor.populate_elective_mappings(
+                supabase_admin_client,
+                mappings,
+                branch,
+                regulation
+            )
+            logger.info(f"Inserted {inserted_count} mappings into database")
+        else:
+            raise HTTPException(status_code=500, detail="Supabase admin client not configured")
+        
+        return CurriculumExtractionResponse(
+            status="success",
+            message=f"Extracted and stored {len(mappings)} elective mappings",
+            mappings_extracted=len(mappings),
+            mappings_inserted=inserted_count,
+            branch=branch,
+            regulation=regulation,
+            timestamp=datetime.utcnow()
+        )
+    
+    except Exception as e:
+        logger.error(f"Error extracting curriculum: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error extracting curriculum mappings: {str(e)}"
+        )
+    
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+@router.get("/curriculum-mappings", summary="Get curriculum elective mappings (V2)")
+async def get_curriculum_mappings(
+    branch: Optional[str] = Query(None, description="Filter by branch"),
+    regulation: Optional[str] = Query(None, description="Filter by regulation")
+):
+    """
+    Retrieve all stored curriculum elective mappings
+    """
+    if not supabase_admin_client:
+        raise HTTPException(status_code=500, detail="Supabase admin client not configured")
+    
+    try:
+        query = supabase_admin_client.table("syllabus_elective_mappings").select("*")
+        
+        if branch:
+            query = query.eq("branch", branch)
+        if regulation:
+            query = query.eq("regulation", regulation)
+        
+        result = query.execute()
+        
+        return {
+            "status": "success",
+            "total": len(result.data) if result.data else 0,
+            "mappings": result.data or [],
+            "branch": branch,
+            "regulation": regulation
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving curriculum mappings: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving mappings: {str(e)}"
+        )
 
 
 async def process_syllabus_background_v2(
