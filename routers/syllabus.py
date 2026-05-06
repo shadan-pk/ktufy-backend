@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.auth import get_current_user, AuthenticatedUser
 from schemas.syllabus import BranchItem, SubjectListItem, SubjectDetail, ModuleItem
 from services.syllabus_db_service import syllabus_db_service
-from utils.supabase_client import supabase_client
+from utils.supabase_client import supabase_admin_client
 
 # Neo4j fallback (only used if Supabase tables are empty)
 from services.neo4j_service_v2 import neo4j_service
@@ -58,7 +58,7 @@ async def get_branches(
     """
     try:
         # ── Primary: Supabase ──
-        branches_db = syllabus_db_service.get_branches(supabase_client)
+        branches_db = syllabus_db_service.get_branches(supabase_admin_client)
         if branches_db:
             return [
                 BranchItem(
@@ -130,7 +130,7 @@ async def get_subjects(
     try:
         # ── Primary: Supabase ──
         subjects_db = syllabus_db_service.get_subjects(
-            client=supabase_client,
+            client=supabase_admin_client,
             branch=branch.upper() if branch else None,
             semester=sem_int,
         )
@@ -201,7 +201,7 @@ async def get_subject_detail(
     """
     try:
         # ── Primary: Supabase ──
-        subject = syllabus_db_service.get_subject_detail(supabase_client, subject_code)
+        subject = syllabus_db_service.get_subject_detail(supabase_admin_client, subject_code)
         if subject:
             modules = []
             for m in subject.get("modules", []):
