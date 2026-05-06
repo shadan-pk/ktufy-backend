@@ -17,7 +17,7 @@ from services.neo4j_service_v2 import neo4j_service
 from services.embedding_service_v2 import embedding_service
 from services.query_router import query_router
 from utils.supabase_client import supabase_admin_client
-from services.queue import enqueue_curriculum_extraction
+from services.queue import get_queue, enqueue_curriculum_extraction
 from services.processing_worker import process_syllabus_job
 from services.processing_jobs import (
     create_uploaded_file,
