@@ -120,6 +120,7 @@ def process_curriculum_job(job_id: str, pdf_path: str, branch: str, regulation: 
 
     except Exception as exc:
         logger.error("[WORKER][CURRICULUM] Job %s failed: %s", job_id, exc, exc_info=True)
+        error_str = str(exc)
         update_processing_job(
             supabase_admin_client,
             job_id,
@@ -127,10 +128,10 @@ def process_curriculum_job(job_id: str, pdf_path: str, branch: str, regulation: 
             progress=100,
             message="Curriculum extraction failed",
             completed_at=datetime.utcnow(),
-            error=str(exc),
-            result={"curriculum_extraction": {"success": False, "errors": [str(exc)]}},
+            error=error_str,
+            result={"curriculum_extraction": {"success": False, "errors": [error_str], "mappings_extracted": 0, "mappings_inserted": 0}},
         )
-        return {"success": False, "errors": [str(exc)]}
+        return {"success": False, "errors": [error_str], "mappings_extracted": 0, "mappings_inserted": 0}
     finally:
         try:
             if pdf_path and os.path.exists(pdf_path):

@@ -3,6 +3,7 @@ Curriculum Extractor Service
 Extracts elective mappings from KTU curriculum PDFs using LLM.
 """
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from services.pdf_processor import pdf_processor
 from services.llm_extractor_v2 import llm_extractor
@@ -401,7 +402,7 @@ IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semeste
                             continue
                         cell_str = str(cell).strip()
                         # match patterns like CST 312 or CST312
-                        m = __import__('re').search(r"\b([A-Z]{2,4})\s*(\d{3,4})\b", cell_str)
+                        m = re.search(r"\b([A-Z]{2,4})\s*(\d{3,4})\b", cell_str)
                         if m:
                             subject_code = (m.group(1) + m.group(2)).upper()
                             break
@@ -416,7 +417,7 @@ IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semeste
                             s = str(cell).strip()
                             if subject_code.replace(' ', '') in s.replace(' ', ''):
                                 continue
-                            if __import__('re').search(r"\b([A-Z]{2,4})\s*(\d{3,4})\b", s):
+                            if re.search(r"\b([A-Z]{2,4})\s*(\d{3,4})\b", s):
                                 continue
                             if len(s) > 1:
                                 names.append(s)
@@ -439,7 +440,7 @@ IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semeste
 
                         # semester: look for 'SEMESTER <n>' nearby
                         sem = None
-                        m2 = __import__('re').search(r"SEMESTER\s*(\d)", up)
+                        m2 = re.search(r"SEMESTER\s*(\d)", up)
                         if m2:
                             sem = int(m2.group(1))
 
