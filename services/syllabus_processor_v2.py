@@ -167,26 +167,18 @@ class SyllabusProcessorV2:
                 job.message = "Text extracted. Loading curriculum context..."
                 sync_job()
             
-            # ═══════════════════════════════════════════════════════════════
-            # Step 1.5: Load curriculum elective mappings
-            # ═══════════════════════════════════════════════════════════════
-            curriculum_context = {}
-            if supabase_client:
-                try:
-                    mappings_result = supabase_client.table("syllabus_elective_mappings").select("subject_code,program_elective").eq("branch", branch).eq("regulation", regulation).execute()
-                    if mappings_result and mappings_result.data:
-                        curriculum_context = {m["subject_code"]: m["program_elective"] for m in mappings_result.data}
-                        logger.info(f"Loaded {len(curriculum_context)} elective mappings for {branch}")
-                except Exception as e:
-                    logger.warning(f"Could not load curriculum mappings: {e}")
-            
             if job:
                 job.progress = 20
-                job.message = "Parsing syllabus structure with curriculum context..."
+                job.message = "Parsing syllabus structure..."
                 sync_job()
             
             # ═══════════════════════════════════════════════════════════════
             # Step 2: Extract structured data with V2 extractor
+            # NOTE: We do NOT pass syllabus_elective_mappings context here.
+            # The LLM must extract only what is literally in the PDF
+            # (category = PCC/PEC/OEC as written in the syllabus).
+            # program_elective resolution (PEC1, PEC2, etc.) is handled
+            # dynamically by the frontend from the mappings table.
             # ═══════════════════════════════════════════════════════════════
             logger.info("Step 2: Extracting structured data with LLM V2")
             
@@ -195,7 +187,6 @@ class SyllabusProcessorV2:
                 semester=semester,
                 branch=branch,
                 regulation=regulation,
-                curriculum_context=curriculum_context if curriculum_context else None
             )
             
             subjects_count = len(structured_data.get("subjects", []))

@@ -37,20 +37,12 @@ class SyllabusDBService:
     def upsert_subject(self, admin_client, subject_data: dict, semester: int, branch: str, regulation: str = "2019") -> Optional[dict]:
         """
         Upsert a subject into syllabus_subjects.
+        Stores category exactly as extracted from the syllabus PDF (PCC, PEC, OEC).
+        program_elective is NOT set here — it is resolved by the frontend from
+        the syllabus_elective_mappings table.
         Returns the upserted row or None on failure.
         """
         try:
-            # If subject is a program elective (PEC) and no explicit program_elective
-            # provided, try to resolve it from elective mappings table.
-            program_elective = subject_data.get("program_elective") or ""
-            if (str(subject_data.get("category", "")).strip().upper() == "PEC") and not program_elective:
-                try:
-                    mapping = admin_client.table("syllabus_elective_mappings").select("program_elective").eq("subject_code", subject_data.get("code")).eq("regulation", regulation).execute()
-                    if mapping and mapping.data:
-                        program_elective = mapping.data[0].get("program_elective") or ""
-                except Exception:
-                    program_elective = ""
-
             row = {
                 "code": subject_data["code"],
                 "name": subject_data["name"],
@@ -59,7 +51,7 @@ class SyllabusDBService:
                 "regulation": regulation,
                 "credits": self._coerce_int(subject_data.get("credits")),
                 "category": subject_data.get("category", ""),
-                "program_elective": program_elective,
+                "program_elective": "",  # resolved by frontend via syllabus_elective_mappings
                 "hours_per_week": self._coerce_int(subject_data.get("hours_per_week")),
                 "course_outcomes": subject_data.get("course_outcomes", []),
                 "textbooks": subject_data.get("textbooks", []),
