@@ -151,10 +151,15 @@ If you cannot find a field, use null.
         semester: int, 
         branch: str,
         regulation: str = "2019",
-        chunk_size: int = 12000
+        chunk_size: int = 12000,
+        curriculum_context: Optional[Dict[str, str]] = None
     ) -> dict:
         """
-        Extract structured syllabus data with strict fidelity to source
+        Extract structured syllabus data with strict fidelity to source.
+        Optionally uses curriculum_context to map electives to specific groups (PEC1, PEC2, etc.)
+        
+        Args:
+            curriculum_context: Dict mapping subject_code → program_elective (e.g., {"CST3E1": "PEC1"})
         
         Returns:
         {
@@ -168,10 +173,10 @@ If you cannot find a field, use null.
         }
         """
         if len(raw_text) > chunk_size:
-            return self._extract_chunked(raw_text, semester, branch, regulation, chunk_size)
+            return self._extract_chunked(raw_text, semester, branch, regulation, chunk_size, curriculum_context)
         
         # Step 1: Extract raw structure (verbatim)
-        raw_structure = self._extract_verbatim_structure(raw_text, semester, branch)
+        raw_structure = self._extract_verbatim_structure(raw_text, semester, branch, curriculum_context)
         
         # Step 2: Normalize and split into atomic concepts
         normalized = self._normalize_to_atomic_concepts(raw_structure)
@@ -192,8 +197,19 @@ If you cannot find a field, use null.
             "content_chunks": content_chunks
         }
     
-    def _build_verbatim_extraction_prompt(self, text: str, semester: int, branch: str) -> str:
-        """Build prompt that enforces verbatim extraction"""
+    def _build_verbatim_extraction_prompt(self, text: str, semester: int, branch: str, curriculum_context: Optional[Dict[str, str]] = None) -> str:
+        """Build prompt that enforces verbatim extraction with optional curriculum context"""
+        
+        curriculum_section = ""
+        if curriculum_context:
+            curriculum_lines = [f"  - {code}: {prog_elective}" for code, prog_elective in list(curriculum_context.items())[:50]]
+            curriculum_lines_str = "\n".join(curriculum_lines)
+            curriculum_section = f"""
+KNOWN ELECTIVE MAPPINGS FROM CURRICULUM:
+{curriculum_lines_str}
+For subjects matching these codes, use their program_elective value.
+If a subject code matches, include "program_elective": "VALUE" in the extracted subject JSON."""
+        
         return f"""You are a KTU syllabus parser. Extract data EXACTLY as written in the syllabus.
 
 CRITICAL RULES:
@@ -206,7 +222,7 @@ CRITICAL RULES:
 CONTEXT:
 - Semester: {semester}
 - Branch: {branch}
-- University: KTU (Kerala Technological University)
+- University: KTU (Kerala Technological University){curriculum_section}
 
 SYLLABUS TEXT:
 {text}
@@ -219,6 +235,7 @@ Return ONLY valid JSON in this exact format:
             "name": "EXACT subject name from syllabus",
             "credits": 4,
             "category": "PCC",
+            "program_elective": "PEC1 if mapped, else empty",
             "hours_per_week": 3,
             "modules": [
                 {{
@@ -240,9 +257,9 @@ Return ONLY valid JSON in this exact format:
 
 IMPORTANT: Return ONLY the JSON. Copy text VERBATIM from syllabus."""
     
-    def _extract_verbatim_structure(self, text: str, semester: int, branch: str) -> dict:
-        """Extract structure with verbatim text"""
-        prompt = self._build_verbatim_extraction_prompt(text, semester, branch)
+    def _extract_verbatim_structure(self, text: str, semester: int, branch: str, curriculum_context: Optional[Dict[str, str]] = None) -> dict:
+        """Extract structure with verbatim text, optionally using curriculum context for elective mapping"""
+        prompt = self._build_verbatim_extraction_prompt(text, semester, branch, curriculum_context)
         response = self._call_llm(prompt)
         try:
             return self._parse_json_response(response)
@@ -613,7 +630,8 @@ Recommended Textbooks and References:
         semester: int, 
         branch: str,
         regulation: str,
-        chunk_size: int
+        chunk_size: int,
+        curriculum_context: Optional[Dict[str, str]] = None
     ) -> dict:
         """Process large text in chunks in parallel"""
         chunks = [raw_text[i:i + chunk_size] for i in range(0, len(raw_text), chunk_size - 1000)]
@@ -627,7 +645,7 @@ Recommended Textbooks and References:
         def process_single_chunk(i, chunk):
             logger.info(f"Processing chunk {i + 1}/{len(chunks)}")
             try:
-                raw_structure = self._extract_verbatim_structure(chunk, semester, branch)
+                raw_structure = self._extract_verbatim_structure(chunk, semester, branch, curriculum_context)
                 normalized = self._normalize_to_atomic_concepts(raw_structure)
                 return normalized
             except Exception as e:

@@ -164,7 +164,25 @@ class SyllabusProcessorV2:
             
             if job:
                 job.progress = 15
-                job.message = "Text extracted. Parsing syllabus structure..."
+                job.message = "Text extracted. Loading curriculum context..."
+                sync_job()
+            
+            # ═══════════════════════════════════════════════════════════════
+            # Step 1.5: Load curriculum elective mappings
+            # ═══════════════════════════════════════════════════════════════
+            curriculum_context = {}
+            if supabase_client:
+                try:
+                    mappings_result = supabase_client.table("syllabus_elective_mappings").select("subject_code,program_elective").eq("branch", branch).eq("regulation", regulation).execute()
+                    if mappings_result and mappings_result.data:
+                        curriculum_context = {m["subject_code"]: m["program_elective"] for m in mappings_result.data}
+                        logger.info(f"Loaded {len(curriculum_context)} elective mappings for {branch}")
+                except Exception as e:
+                    logger.warning(f"Could not load curriculum mappings: {e}")
+            
+            if job:
+                job.progress = 20
+                job.message = "Parsing syllabus structure with curriculum context..."
                 sync_job()
             
             # ═══════════════════════════════════════════════════════════════
@@ -176,7 +194,8 @@ class SyllabusProcessorV2:
                 raw_text=raw_text,
                 semester=semester,
                 branch=branch,
-                regulation=regulation
+                regulation=regulation,
+                curriculum_context=curriculum_context if curriculum_context else None
             )
             
             subjects_count = len(structured_data.get("subjects", []))
