@@ -293,6 +293,7 @@ class SyllabusDBService:
                 return None
 
             subject = result.data[0]
+            print(f"DEBUG: Subject data from View: {subject}")
 
             # Use mapped_elective from view
             val = subject.get("mapped_elective")
@@ -302,22 +303,28 @@ class SyllabusDBService:
             else:
                 subject["program_elective"] = ""
 
-            # Fetch modules
+            # Fetch modules - check both spaced and non-spaced versions
+            code_no_space = subject["code"].replace(" ", "")
+            code_with_space = subject["code"] if " " in subject["code"] else f"{subject['code'][:3]} {subject['code'][3:]}"
+            reg_val = subject.get("regulation") or regulation or "2019"
+            
             mod_result = (
                 client.table("syllabus_modules")
                 .select("*")
-                .eq("subject_code", subject["code"])
-                .eq("regulation", subject["regulation"])
+                .eq("regulation", reg_val)
+                .or_(f"subject_code.eq.{subject['code']},subject_code.eq.{code_no_space},subject_code.eq.{code_with_space}")
                 .order("module_number")
                 .execute()
             )
+
+            print(f"📦 [Syllabus] Found {len(mod_result.data)} modules for {subject['code']}")
 
             modules = []
             for mod in mod_result.data:
                 # Fetch topics for this module
                 topic_result = (
                     client.table("syllabus_topics")
-                    .select("*")
+                    .select("name")
                     .eq("module_id", mod["id"])
                     .order("sort_order")
                     .execute()
@@ -326,6 +333,7 @@ class SyllabusDBService:
                 modules.append({
                     "module_number": mod["module_number"],
                     "name": mod["name"],
+                    "title": mod["name"], # Frontend expects 'title'
                     "hours": mod.get("hours"),
                     "topics": [t["name"] for t in topic_result.data],
                 })
