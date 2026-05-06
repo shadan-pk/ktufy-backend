@@ -378,6 +378,42 @@ class SyllabusProcessorV2:
             logger.warning(f"Failed to delete subject from DB: {e}")
         
         return result
+
+    def bulk_delete_subjects(
+        self,
+        semester: Optional[int] = None,
+        branch: Optional[str] = None,
+        regulation: Optional[str] = "2019",
+        supabase_client=None
+    ) -> dict:
+        """Bulk delete subjects based on filters"""
+        # 1. Get subjects matching filters from Neo4j
+        if not neo4j_service.is_connected():
+            return {"error": "Neo4j not connected", "deleted_count": 0}
+        
+        subjects = neo4j_service.get_all_subjects(
+            semester=semester,
+            branch=branch,
+            regulation=regulation
+        )
+        
+        deleted_count = 0
+        deleted_codes = []
+        
+        # 2. Delete each subject
+        for subject in subjects:
+            code = subject.get("code")
+            if code:
+                self.delete_subject(code, regulation, supabase_client)
+                deleted_count += 1
+                deleted_codes.append(code)
+        
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "deleted_codes": deleted_codes,
+            "filters": {"semester": semester, "branch": branch, "regulation": regulation}
+        }
     
     def add_subject_manual(
         self,

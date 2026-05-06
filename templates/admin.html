@@ -774,7 +774,10 @@
             <section id="subjects-section" class="content-section">
                 <div class="page-header flex items-center justify-between">
                     <div><h2>Subjects</h2><p>Browse and manage subjects in the knowledge graph</p></div>
-                    <button class="btn btn-primary" onclick="openModal('addSubjectModal')"><i data-lucide="plus-circle"></i> Add Subject</button>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-outline" id="bulk-delete-btn" onclick="bulkDeleteSubjects()"><i data-lucide="trash-2"></i> Bulk Delete</button>
+                        <button class="btn btn-primary" onclick="openModal('addSubjectModal')"><i data-lucide="plus-circle"></i> Add Subject</button>
+                    </div>
                 </div>
                 <div class="card mb-md">
                     <div class="card-body compact">
@@ -805,11 +808,28 @@
                                 <i data-lucide="search" class="search-icon" style="width:16px;height:16px"></i>
                                 <input type="text" class="form-input" placeholder="Search subjects..." id="search-subject" onkeyup="filterSubjects()">
                             </div>
+                            <div class="flex items-center gap-xs ml-auto">
+                                <span class="text-xs text-muted font-medium uppercase mr-1">View</span>
+                                <div class="btn-group" style="flex-direction:row">
+                                    <button class="btn btn-outline btn-sm active" id="view-grid-btn" onclick="toggleSubjectsView('grid')" title="Grid View"><i data-lucide="layout-grid"></i></button>
+                                    <button class="btn btn-outline btn-sm" id="view-list-btn" onclick="toggleSubjectsView('list')" title="List View"><i data-lucide="list"></i></button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="grid-3 gap-md" id="subjects-grid">
-                    <div class="text-center text-muted" style="grid-column:1/-1;padding:2rem">Loading subjects...</div>
+                <div id="subjects-container">
+                    <div class="grid-3 gap-md" id="subjects-grid">
+                        <div class="text-center text-muted" style="grid-column:1/-1;padding:2rem">Loading subjects...</div>
+                    </div>
+                    <div class="card" id="subjects-list-card" style="display:none">
+                        <div class="table-wrap">
+                            <table>
+                                <thead><tr><th>Code</th><th>Name</th><th>Syllabus Info</th><th>Sem/Branch</th><th>Actions</th></tr></thead>
+                                <tbody id="subjects-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -880,7 +900,10 @@
             <section id="jobs-section" class="content-section">
                 <div class="page-header flex items-center justify-between">
                     <div><h2>Processing Jobs</h2><p>Track syllabus processing pipeline status</p></div>
-                    <button class="btn btn-outline" onclick="loadJobs()"><i data-lucide="refresh-cw"></i> Refresh</button>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-destructive btn-outline" onclick="stopAllJobs()"><i data-lucide="ban"></i> Stop All Processes</button>
+                        <button class="btn btn-outline" onclick="loadJobs()"><i data-lucide="refresh-cw"></i> Refresh</button>
+                    </div>
                 </div>
                 <div class="card">
                     <div class="table-wrap">

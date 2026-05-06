@@ -30,3 +30,14 @@ def enqueue_curriculum_extraction(job_id: str, pdf_path: str, branch: str, regul
         result_ttl=24 * 60 * 60,
         failure_ttl=24 * 60 * 60,
     )
+
+
+def cancel_all_jobs():
+    """Cancel all jobs in the queue."""
+    queue = get_queue()
+    # Empty the queue
+    queue.empty()
+    # Cancel all currently executing or queued jobs if possible
+    # Note: RQ doesn't easily let you kill currently running jobs on remote workers
+    # from the queue object, but emptying handles the pending ones.
+    return True

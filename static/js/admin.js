@@ -885,6 +885,7 @@ async function deleteFile(filename) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 let allSubjects = [];
+let subjectsViewMode = 'grid'; // 'grid' or 'list'
 
 async function loadSubjects() {
     try {
@@ -912,33 +913,135 @@ async function loadSubjects() {
 
 function renderSubjects(subjects) {
     const grid = document.getElementById('subjects-grid');
+    const listCard = document.getElementById('subjects-list-card');
+    const listBody = document.getElementById('subjects-list');
 
     if (subjects.length === 0) {
-        grid.innerHTML = '<div class="text-center text-muted" style="grid-column:1/-1;padding:2rem">No subjects found. Upload a syllabus or add subjects manually.</div>';
+        const emptyMsg = '<div class="text-center text-muted" style="grid-column:1/-1;padding:2rem">No subjects found. Upload a syllabus or add subjects manually.</div>';
+        if (subjectsViewMode === 'grid') {
+            grid.innerHTML = emptyMsg;
+            grid.style.display = 'grid';
+            listCard.style.display = 'none';
+        } else {
+            listBody.innerHTML = '<tr><td colspan="5" class="td-empty">No subjects found</td></tr>';
+            grid.style.display = 'none';
+            listCard.style.display = 'block';
+        }
         return;
     }
 
-    grid.innerHTML = subjects.map(subject => `
-        <div class="card subject-card" onclick="showSubjectDetails('${subject.code}', '${subject.regulation || '2019'}')">
-            <div class="card-body">
-                <div class="flex items-start justify-between" style="margin-bottom:0.5rem">
-                    <span class="badge badge-info">${subject.code}</span>
-                    <div class="flex gap-xs">
-                        <span class="badge badge-muted">${subject.regulation || '2019'}</span>
-                        <span class="badge badge-default">${subject.module_count || 0} modules</span>
+    if (subjectsViewMode === 'grid') {
+        grid.style.display = 'grid';
+        listCard.style.display = 'none';
+        grid.innerHTML = subjects.map(subject => `
+            <div class="card subject-card" onclick="showSubjectDetails('${subject.code}', '${subject.regulation || '2019'}')">
+                <div class="card-body">
+                    <div class="flex items-start justify-between" style="margin-bottom:0.5rem">
+                        <span class="badge badge-info">${subject.code}</span>
+                        <div class="flex gap-xs">
+                            <span class="badge badge-muted">${subject.regulation || '2019'}</span>
+                            <span class="badge badge-default">${subject.module_count || 0} modules</span>
+                        </div>
+                    </div>
+                    <h5 style="font-size:0.9375rem;margin-bottom:0.25rem">${subject.name}</h5>
+                    <div class="subject-meta">
+                        <span><i data-lucide="graduation-cap" style="width:14px;height:14px"></i> S${subject.semester}</span>
+                        <span><i data-lucide="building-2" style="width:14px;height:14px"></i> ${subject.branch}</span>
+                        <span><i data-lucide="star" style="width:14px;height:14px"></i> ${subject.credits} credits</span>
                     </div>
                 </div>
-                <h5 style="font-size:0.9375rem;margin-bottom:0.25rem">${subject.name}</h5>
-                <div class="subject-meta">
-                    <span><i data-lucide="graduation-cap" style="width:14px;height:14px"></i> S${subject.semester}</span>
-                    <span><i data-lucide="building-2" style="width:14px;height:14px"></i> ${subject.branch}</span>
-                    <span><i data-lucide="star" style="width:14px;height:14px"></i> ${subject.credits} credits</span>
-                </div>
             </div>
-        </div>
-    `).join('');
+        `).join('');
+    } else {
+        grid.style.display = 'none';
+        listCard.style.display = 'block';
+        listBody.innerHTML = subjects.map(subject => `
+            <tr>
+                <td class="font-medium"><code>${subject.code}</code></td>
+                <td>
+                    <div class="font-medium">${subject.name}</div>
+                    <div class="text-xs text-muted-foreground">${subject.category || 'PCC'}</div>
+                </td>
+                <td>
+                    <div class="flex gap-xs">
+                        <span class="badge badge-outline">${subject.regulation || '2019'}</span>
+                        <span class="badge badge-muted">${subject.module_count || 0} modules</span>
+                    </div>
+                </td>
+                <td>
+                    <div class="text-sm">S${subject.semester} • ${subject.branch}</div>
+                    <div class="text-xs text-muted-foreground">${subject.credits} Credits</div>
+                </td>
+                <td>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-ghost btn-sm" onclick="showSubjectDetails('${subject.code}', '${subject.regulation || '2019'}')" title="View Details">
+                            <i data-lucide="eye"></i>
+                        </button>
+                        <button class="btn btn-ghost btn-sm text-danger" onclick="deleteSubject('${subject.code}', '${subject.regulation || '2019'}')" title="Delete">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function toggleSubjectsView(mode) {
+    subjectsViewMode = mode;
+    
+    // Update button states
+    document.getElementById('view-grid-btn').classList.toggle('active', mode === 'grid');
+    document.getElementById('view-list-btn').classList.toggle('active', mode === 'list');
+    
+    // Re-filter and render
+    filterSubjects();
+}
+
+async function bulkDeleteSubjects() {
+    const branch = document.getElementById('filter-branch').value;
+    const semester = document.getElementById('filter-semester').value;
+    const regulation = document.getElementById('filter-regulation').value || '2019';
+
+    if (!semester && !branch) {
+        showToast('Please select at least a Semester or Branch to bulk delete.', 'warning');
+        return;
+    }
+
+    const filterText = (semester ? `S${semester} ` : '') + (branch ? `${branch} ` : '') + `(${regulation} scheme)`;
+    
+    if (!confirm(`⚠️ WARNING: This will delete ALL ${filterText} subjects and their data from the Knowledge Graph and database.\n\nAre you sure you want to proceed?`)) {
+        return;
+    }
+
+    const confirmCode = prompt(`Type "DELETE ALL" to confirm deleting ${filterText} subjects:`);
+    if (confirmCode !== 'DELETE ALL') {
+        showToast('Bulk delete cancelled', 'info');
+        return;
+    }
+
+    try {
+        let url = `${API_BASE_V2}/subjects/bulk?regulation=${regulation}`;
+        if (semester) url += `&semester=${semester}`;
+        if (branch) url += `&branch=${branch}`;
+
+        showToast('Processing bulk deletion...', 'info');
+        
+        const response = await fetch(url, { method: 'DELETE' });
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast(data.message, 'success');
+            loadSubjects();
+            refreshStats();
+        } else {
+            showToast(data.detail || 'Bulk delete failed', 'danger');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
+    }
 }
 
 function filterSubjects() {
@@ -1229,6 +1332,25 @@ async function loadJobs() {
 
     } catch (error) {
         console.error('Error loading jobs:', error);
+    }
+}
+
+async function stopAllJobs() {
+    if (!confirm('Stop all active processing jobs? This will clear the background queue.')) return;
+
+    try {
+        const response = await fetch(`${API_BASE_V2}/jobs/stop-all`, { method: 'POST' });
+        const data = await response.json();
+
+        if (response.ok) {
+            showToast(data.message, 'success');
+            loadJobs();
+            loadUploadedFiles();
+        } else {
+            showToast(data.detail || 'Failed to stop jobs', 'danger');
+        }
+    } catch (error) {
+        showToast('Error: ' + error.message, 'danger');
     }
 }
 

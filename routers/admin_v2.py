@@ -17,7 +17,7 @@ from services.neo4j_service_v2 import neo4j_service
 from services.embedding_service_v2 import embedding_service
 from services.query_router import query_router
 from utils.supabase_client import supabase_admin_client
-from services.queue import get_queue, enqueue_curriculum_extraction
+from services.queue import get_queue, enqueue_curriculum_extraction, cancel_all_jobs
 from services.processing_worker import process_syllabus_job
 from services.processing_jobs import (
     create_uploaded_file,
@@ -518,6 +518,40 @@ async def get_job_status(job_id: str):
     )
 
 
+@router.post("/jobs/stop-all", summary="Stop all active processing jobs")
+async def stop_all_jobs():
+    """
+    Stop all pending and queued jobs by clearing the Redis queue
+    and updating their status in Supabase.
+    """
+    if not supabase_admin_client:
+        raise HTTPException(status_code=500, detail="Supabase admin client not configured")
+
+    # 1. Clear the Redis queue
+    cancel_all_jobs()
+
+    # 2. Update all non-terminal jobs in Supabase
+    try:
+        # Terminal statuses are 'completed', 'failed', 'stopped'
+        active_statuses = ["pending", "queued", "processing"]
+        
+        # We need to update both uploaded_files and processing_jobs
+        supabase_admin_client.table("processing_jobs") \
+            .update({"status": "stopped", "message": "Stopped by administrator"}) \
+            .in_("status", active_statuses) \
+            .execute()
+            
+        supabase_admin_client.table("uploaded_files") \
+            .update({"status": "stopped"}) \
+            .in_("status", active_statuses) \
+            .execute()
+
+        return {"status": "success", "message": "All active jobs have been stopped"}
+    except Exception as e:
+        logger.error(f"Error stopping jobs: {e}")
+        raise HTTPException(status_code=500, detail=f"Error stopping jobs: {str(e)}")
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Subject Management (V2)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -594,6 +628,40 @@ async def delete_subject(subject_code: str, regulation: str = "2019"):
         "regulation": regulation,
         "embeddings_deleted": result["embeddings_deleted"],
         "database_deleted": result.get("database_deleted", False),
+    }
+
+
+@router.delete("/subjects/bulk", summary="Bulk delete subjects based on filters")
+async def bulk_delete_subjects(
+    semester: Optional[int] = Query(None, ge=1, le=8),
+    branch: Optional[str] = Query(None),
+    regulation: Optional[str] = Query("2019")
+):
+    """
+    Bulk delete subjects from knowledge graph, embeddings, and database
+    based on provided filters (semester, branch, regulation).
+    """
+    if not semester and not branch:
+        raise HTTPException(
+            status_code=400, 
+            detail="At least one filter (semester or branch) must be provided for bulk delete to avoid accidental full wipe."
+        )
+
+    result = syllabus_processor.bulk_delete_subjects(
+        semester=semester,
+        branch=branch,
+        regulation=regulation,
+        supabase_client=supabase_admin_client
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to bulk delete subjects"))
+    
+    return {
+        "message": f"Successfully deleted {result['deleted_count']} subjects",
+        "deleted_count": result["deleted_count"],
+        "deleted_codes": result["deleted_codes"],
+        "filters": result["filters"]
     }
 
 
