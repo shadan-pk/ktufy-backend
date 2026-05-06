@@ -360,29 +360,31 @@ async def extract_curriculum(
         logger.info(f"Extracting curriculum mappings from {file.filename} for {branch}/{regulation}")
         
         # Extract mappings from PDF
-        mappings = curriculum_extractor.extract_elective_mappings_from_pdf(
+        extraction_result = curriculum_extractor.extract_elective_mappings_from_pdf(
             temp_path, 
             branch, 
             regulation
         )
         
-        if not mappings:
+        if not extraction_result.get("success") or not extraction_result.get("mappings"):
             raise HTTPException(
                 status_code=400, 
                 detail="No mappings could be extracted from the PDF. Check file format."
             )
         
+        mappings = extraction_result.get("mappings", [])
         logger.info(f"Extracted {len(mappings)} mappings from curriculum PDF")
         
         # Populate database
         if supabase_admin_client:
-            inserted_count = curriculum_extractor.populate_elective_mappings(
+            stats = curriculum_extractor.populate_elective_mappings(
                 supabase_admin_client,
                 mappings,
                 branch,
                 regulation
             )
-            logger.info(f"Inserted {inserted_count} mappings into database")
+            inserted_count = stats.get("inserted", 0)
+            logger.info(f"Upserted {inserted_count} mappings into database (inserted: {stats.get('inserted')}, updated: {stats.get('updated')}, skipped: {stats.get('skipped')})")
         else:
             raise HTTPException(status_code=500, detail="Supabase admin client not configured")
         
