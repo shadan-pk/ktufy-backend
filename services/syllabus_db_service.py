@@ -253,19 +253,18 @@ class SyllabusDBService:
 
             subjects = []
             for row in result.data:
-                # Get module count for this subject
-                mod_result = (
-                    client.table("syllabus_modules")
-                    .select("id", count="exact")
-                    .eq("subject_code", row["code"])
-                    .eq("regulation", row["regulation"])
-                    .execute()
-                )
-                row["module_count"] = mod_result.count if mod_result.count is not None else len(mod_result.data)
+                # Get module count
+                mod_result = client.table("syllabus_modules").select("id", count="exact").eq("subject_code", row["code"]).eq("regulation", row["regulation"]).execute()
+                row["module_count"] = mod_result.count if mod_result.count is not None else 0
                 
-                # Dynamic resolution of program_elective if missing
-                if not row.get("program_elective"):
-                    row["program_elective"] = elective_mappings.get(row["code"])
+                # Dynamic resolution from syllabus_elective_mappings
+                mapping = elective_mappings.get(row["code"])
+                if mapping:
+                    row["program_elective"] = mapping
+                    # Override category for granular grouping (e.g. PEC -> PEC1)
+                    row["category"] = mapping
+                elif not row.get("program_elective"):
+                    row["program_elective"] = ""
                         
                 subjects.append(row)
 
@@ -310,12 +309,15 @@ class SyllabusDBService:
 
             subject = result.data[0]
 
-            # Dynamic resolution of program_elective if missing
-            if (not subject.get("program_elective")) and (subject.get("category") == "PEC" or subject.get("category") == "OEC"):
+            # Dynamic resolution of program_elective and category
+            if subject.get("category") == "PEC" or subject.get("category") == "OEC":
                 try:
                     mapping = client.table("syllabus_elective_mappings").select("program_elective").eq("subject_code", subject["code"]).eq("regulation", subject.get("regulation", "2019")).execute()
                     if mapping.data:
-                        subject["program_elective"] = mapping.data[0]["program_elective"]
+                        val = mapping.data[0]["program_elective"]
+                        subject["program_elective"] = val
+                        # Update category for consistent labeling in UI
+                        subject["category"] = val
                 except Exception:
                     pass
 
