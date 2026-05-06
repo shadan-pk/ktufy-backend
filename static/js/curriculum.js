@@ -99,51 +99,37 @@ async function extractCurriculum() {
 
         const data = await response.json();
 
-        // Display result
         resultContent.innerHTML = `
-            <div class="alert alert-success" style="margin-bottom: 1rem;">
+            <div class="alert alert-info" style="margin-bottom: 1rem;">
                 <div style="display: flex; gap: 0.75rem;">
-                    <i data-lucide="check-circle" style="width: 20px; height: 20px; flex-shrink: 0; color: var(--success);"></i>
+                    <i data-lucide="clock-3" style="width: 20px; height: 20px; flex-shrink: 0; color: var(--info);"></i>
                     <div>
-                        <div style="font-weight: 600; margin-bottom: 0.25rem;">Extraction Successful</div>
+                        <div style="font-weight: 600; margin-bottom: 0.25rem;">Extraction Queued</div>
                         <div style="font-size: 0.875rem; color: var(--muted-foreground);">
-                            ${data.message}
+                            ${escapeHtml(data.message || 'Queued for background processing')}
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="grid-2 gap-md">
-                <div class="card">
-                    <div class="card-body">
-                        <div style="font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 0.5rem;">Mappings Extracted</div>
-                        <div style="font-size: 1.875rem; font-weight: 700;">${data.mappings_extracted}</div>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-body">
-                        <div style="font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 0.5rem;">Inserted to Database</div>
-                        <div style="font-size: 1.875rem; font-weight: 700;">${data.mappings_inserted}</div>
-                    </div>
+            <div class="card">
+                <div class="card-body">
+                    <div style="font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 0.5rem;">Job ID</div>
+                    <div style="font-family: monospace; word-break: break-all;">${escapeHtml(data.job_id)}</div>
                 </div>
             </div>
-            <div class="text-sm text-muted" style="margin-top: 1rem;">
-                Branch: <strong>${escapeHtml(data.branch)}</strong> | 
-                Regulation: <strong>${escapeHtml(data.regulation)}</strong> | 
-                Extracted: <strong>${new Date(data.timestamp).toLocaleString()}</strong>
+            <div id="curriculum-job-status" class="text-sm text-muted" style="margin-top: 1rem;">
+                Waiting for worker to finish...
             </div>
         `;
 
         resultContainer.style.display = 'block';
 
-        // Re-render lucide icons
         if (typeof lucide !== 'undefined') lucide.createIcons();
 
-        showToast(`Successfully extracted and stored ${data.mappings_extracted} mappings`, 'success');
+        showToast('Curriculum extraction queued. The worker will process it in the background.', 'info');
 
-        // Refresh mappings table
-        await loadCurriculumMappings();
+        await pollCurriculumJob(data.job_id, resultContent);
 
-        // Reset form
         fileInput.value = '';
         document.getElementById('curriculum-file-name').textContent = 'No file selected';
 
@@ -221,6 +207,74 @@ async function loadCurriculumMappings(branch = null, regulation = null) {
     } catch (error) {
         console.error('Error loading curriculum mappings:', error);
         table.innerHTML = `<tr><td class="td-empty" colspan="7">Error loading mappings: ${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+/**
+ * Poll curriculum job status until it completes.
+ */
+async function pollCurriculumJob(jobId, resultContent) {
+    const statusContainer = document.getElementById('curriculum-job-status');
+
+    for (;;) {
+        const response = await fetch(`${API_BASE_V2}/jobs/${jobId}`);
+        if (!response.ok) {
+            throw new Error(`Unable to fetch job status (${response.status})`);
+        }
+
+        const job = await response.json();
+        if (statusContainer) {
+            statusContainer.textContent = `Status: ${job.status} | Progress: ${job.progress || 0}% | ${job.message || ''}`;
+        }
+
+        if (job.status === 'completed' || job.status === 'failed') {
+            const summary = job.result?.curriculum_extraction || {};
+            const isSuccess = job.status === 'completed' && summary.success !== false;
+
+            resultContent.innerHTML = isSuccess
+                ? `
+                    <div class="alert alert-success" style="margin-bottom: 1rem;">
+                        <div style="display: flex; gap: 0.75rem;">
+                            <i data-lucide="check-circle" style="width: 20px; height: 20px; flex-shrink: 0; color: var(--success);"></i>
+                            <div>
+                                <div style="font-weight: 600; margin-bottom: 0.25rem;">Extraction Completed</div>
+                                <div style="font-size: 0.875rem; color: var(--muted-foreground);">
+                                    ${escapeHtml(job.message || 'Curriculum extraction finished successfully.')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid-2 gap-md">
+                        <div class="card"><div class="card-body"><div style="font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 0.5rem;">Mappings Extracted</div><div style="font-size: 1.875rem; font-weight: 700;">${summary.mappings_extracted || 0}</div></div></div>
+                        <div class="card"><div class="card-body"><div style="font-size: 0.875rem; color: var(--muted-foreground); margin-bottom: 0.5rem;">Inserted to Database</div><div style="font-size: 1.875rem; font-weight: 700;">${summary.mappings_inserted || 0}</div></div></div>
+                    </div>
+                `
+                : `
+                    <div class="alert alert-danger">
+                        <div style="display: flex; gap: 0.75rem;">
+                            <i data-lucide="alert-circle" style="width: 20px; height: 20px; flex-shrink: 0; color: var(--destructive);"></i>
+                            <div>
+                                <div style="font-weight: 600; margin-bottom: 0.25rem;">Extraction Failed</div>
+                                <div style="font-size: 0.875rem; color: var(--muted-foreground);">
+                                    ${escapeHtml(job.message || (summary.errors || []).join('; ') || 'Worker reported a failure')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
+            if (isSuccess) {
+                showToast(`Successfully extracted ${summary.mappings_extracted || 0} mappings`, 'success');
+                await loadCurriculumMappings();
+            } else {
+                showToast('Curriculum extraction failed. Check the job details for errors.', 'danger');
+            }
+            return;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 2000));
     }
 }
 

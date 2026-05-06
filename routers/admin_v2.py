@@ -16,9 +16,8 @@ from services.syllabus_processor_v2 import syllabus_processor
 from services.neo4j_service_v2 import neo4j_service
 from services.embedding_service_v2 import embedding_service
 from services.query_router import query_router
-from services.curriculum_extractor import curriculum_extractor
 from utils.supabase_client import supabase_admin_client
-from services.queue import get_queue
+from services.queue import enqueue_curriculum_extraction
 from services.processing_worker import process_syllabus_job
 from services.processing_jobs import (
     create_uploaded_file,
@@ -114,11 +113,25 @@ class RelationshipCreate(BaseModel):
 class CurriculumExtractionResponse(BaseModel):
     status: str
     message: str
-    mappings_extracted: int
-    mappings_inserted: int
+    job_id: str
     branch: str
     regulation: str
     timestamp: datetime
+
+
+class CurriculumJobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    progress: int
+    message: str
+    subjects_processed: int
+    total_subjects: int
+    concepts_created: int
+    chunks_stored: int
+    relationships_created: int
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    result: Optional[dict] = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -322,24 +335,13 @@ async def upload_syllabus(
 # Curriculum Extraction (V2)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@router.post("/extract-curriculum", response_model=CurriculumExtractionResponse, summary="Extract curriculum mappings from PDF (V2)")
+@router.post("/extract-curriculum", response_model=CurriculumExtractionResponse, summary="Queue curriculum extraction from PDF (V2)")
 async def extract_curriculum(
     file: UploadFile = File(..., description="Curriculum PDF file"),
     branch: str = Form(..., description="Branch code (CSE, ECE, etc.)"),
     regulation: str = Form(default="2019", description="KTU regulation year (2019, 2024, 2028)")
 ):
-    """
-    Extract elective group mappings from a curriculum PDF
-    
-    This endpoint:
-    1. Reads the curriculum PDF
-    2. Uses LLM to extract subject → elective group mappings
-    3. Validates and stores mappings in the database
-    4. Returns extraction statistics
-    
-    The mappings are stored in the syllabus_elective_mappings table and used
-    during syllabus processing to automatically assign program_elective values.
-    """
+    """Queue elective mapping extraction from a curriculum PDF."""
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
     
@@ -351,8 +353,11 @@ async def extract_curriculum(
             detail=f"Invalid regulation. Must be one of: {valid_regulations}"
         )
     
-    # Save temporary file
-    temp_path = f"temp_curriculum_{uuid.uuid4()}.pdf"
+    # Save temporary file in the shared uploads volume so the worker can read it
+    curriculum_dir = os.path.join(UPLOAD_DIR, "curriculum")
+    os.makedirs(curriculum_dir, exist_ok=True)
+    temp_path = os.path.join(curriculum_dir, f"curriculum_{uuid.uuid4()}.pdf")
+    cleanup_temp_file = True
     try:
         logger.info(f"[CURRICULUM] Starting extraction for {file.filename}")
         logger.info(f"[CURRICULUM] Branch: {branch}, Regulation: {regulation}")
@@ -363,59 +368,34 @@ async def extract_curriculum(
         file_size = os.path.getsize(temp_path)
         logger.info(f"[CURRICULUM] Saved temp file: {temp_path} ({file_size} bytes)")
         
-        logger.info(f"[CURRICULUM] Extracting curriculum mappings from {file.filename}")
-        
-        # Extract mappings from PDF
-        extraction_result = curriculum_extractor.extract_elective_mappings_from_pdf(
-            temp_path, 
-            branch, 
-            regulation
-        )
-        
-        logger.info(f"[CURRICULUM] Extraction result: success={extraction_result.get('success')}, mappings_count={len(extraction_result.get('mappings', []))}")
-        
-        if extraction_result.get("errors"):
-            logger.warning(f"[CURRICULUM] Extraction errors: {extraction_result.get('errors')}")
-        
-        if not extraction_result.get("success") or not extraction_result.get("mappings"):
-            error_detail = "No mappings could be extracted from the PDF. Check file format or PDF content."
-            if extraction_result.get("errors"):
-                error_detail += f" Errors: {'; '.join(extraction_result.get('errors'))}"
-            logger.warning(f"[CURRICULUM] {error_detail}")
-            raise HTTPException(status_code=400, detail=error_detail)
-        
-        mappings = extraction_result.get("mappings", [])
-        logger.info(f"[CURRICULUM] Successfully extracted {len(mappings)} mappings from curriculum PDF")
-        
-        # Populate database
         if not supabase_admin_client:
             logger.error("[CURRICULUM] Supabase admin client not configured")
             raise HTTPException(status_code=500, detail="Supabase admin client not configured")
-        
-        logger.info(f"[CURRICULUM] Populating {len(mappings)} mappings into database")
-        stats = curriculum_extractor.populate_elective_mappings(
+
+        job_row = create_processing_job(
             supabase_admin_client,
-            mappings,
-            branch,
-            regulation
+            file_id=None,
+            status="queued",
+            progress=0,
+            message="Queued curriculum extraction",
         )
-        
-        inserted_count = stats.get("inserted", 0)
-        updated_count = stats.get("updated", 0)
-        skipped_count = stats.get("skipped", 0)
-        
-        logger.info(f"[CURRICULUM] Database stats: inserted={inserted_count}, updated={updated_count}, skipped={skipped_count}")
-        
-        if stats.get("errors"):
-            logger.warning(f"[CURRICULUM] Database errors: {stats.get('errors')}")
-        
-        logger.info(f"[CURRICULUM] Extraction complete: {inserted_count} inserted, {updated_count} updated")
-        
+        if not job_row:
+            raise HTTPException(status_code=500, detail="Could not create curriculum extraction job")
+
+        logger.info(f"[CURRICULUM] Created job {job_row['id']}, enqueueing worker task")
+        enqueue_curriculum_extraction(job_row["id"], temp_path, branch, regulation)
+        cleanup_temp_file = False
+
+        update_processing_job(
+            supabase_admin_client,
+            job_row["id"],
+            message="Queued for background curriculum extraction",
+        )
+
         return CurriculumExtractionResponse(
-            status="success",
-            message=f"Extracted and stored {len(mappings)} elective mappings",
-            mappings_extracted=len(mappings),
-            mappings_inserted=inserted_count,
+            status="queued",
+            message="Curriculum extraction queued in the worker",
+            job_id=job_row["id"],
             branch=branch,
             regulation=regulation,
             timestamp=datetime.utcnow()
@@ -434,7 +414,7 @@ async def extract_curriculum(
         )
     
     finally:
-        if os.path.exists(temp_path):
+        if cleanup_temp_file and os.path.exists(temp_path):
             logger.info(f"[CURRICULUM] Cleaning up temp file: {temp_path}")
             os.remove(temp_path)
 
@@ -508,7 +488,7 @@ async def list_jobs():
     return {"jobs": formatted, "total": len(formatted), "version": "2.0"}
 
 
-@router.get("/jobs/{job_id}", response_model=ProcessingJobResponseV2, summary="Get job status (V2)")
+@router.get("/jobs/{job_id}", response_model=CurriculumJobStatusResponse, summary="Get job status (V2)")
 async def get_job_status(job_id: str):
     """
     Get the status of a specific V2 processing job
@@ -521,7 +501,7 @@ async def get_job_status(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
 
     formatted = format_jobs_response(supabase_admin_client, [job])[0]
-    return ProcessingJobResponseV2(
+    return CurriculumJobStatusResponse(
         job_id=formatted.get("job_id"),
         status=formatted.get("status"),
         progress=formatted.get("progress", 0),
@@ -533,6 +513,7 @@ async def get_job_status(job_id: str):
         relationships_created=formatted.get("relationships_created", 0),
         started_at=formatted.get("started_at"),
         completed_at=formatted.get("completed_at"),
+        result=job.get("result"),
     )
 
 

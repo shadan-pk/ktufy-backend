@@ -10,6 +10,7 @@ from typing import Optional
 from redis import Redis
 from rq import Connection, Worker
 
+from services.curriculum_extractor import curriculum_extractor
 from services.syllabus_processor_v2 import syllabus_processor, ProcessingJob
 from services.processing_jobs import update_processing_job, update_uploaded_file
 from utils.supabase_client import supabase_admin_client
@@ -34,6 +35,108 @@ def _sync_job(job_id: str, job: ProcessingJob) -> None:
         error=job.error,
         result=job.result,
     )
+
+
+def process_curriculum_job(job_id: str, pdf_path: str, branch: str, regulation: str) -> dict:
+    """Run curriculum extraction in the background worker."""
+    logger.info("[WORKER][CURRICULUM] Starting job %s for %s (%s)", job_id, branch, regulation)
+
+    update_processing_job(
+        supabase_admin_client,
+        job_id,
+        status="processing",
+        progress=10,
+        message="Extracting curriculum text...",
+        started_at=datetime.utcnow(),
+    )
+
+    result = {
+        "success": False,
+        "mappings_extracted": 0,
+        "mappings_inserted": 0,
+        "errors": [],
+    }
+
+    try:
+        extraction_result = curriculum_extractor.extract_elective_mappings_from_pdf(
+            pdf_path,
+            branch,
+            regulation,
+        )
+
+        mappings = extraction_result.get("mappings", []) if isinstance(extraction_result, dict) else []
+        errors = extraction_result.get("errors", []) if isinstance(extraction_result, dict) else []
+
+        update_processing_job(
+            supabase_admin_client,
+            job_id,
+            progress=45,
+            message=f"Extracted {len(mappings)} curriculum mappings. Saving to database...",
+        )
+
+        insert_stats = {"inserted": 0, "updated": 0, "skipped": 0, "errors": []}
+        if extraction_result.get("success") and mappings:
+            insert_stats = curriculum_extractor.populate_elective_mappings(
+                supabase_admin_client,
+                mappings,
+                branch,
+                regulation,
+            )
+
+        result = {
+            "success": bool(extraction_result.get("success") and mappings),
+            "mappings_extracted": len(mappings),
+            "mappings_inserted": insert_stats.get("inserted", 0),
+            "mappings_updated": insert_stats.get("updated", 0),
+            "mappings_skipped": insert_stats.get("skipped", 0),
+            "errors": errors + insert_stats.get("errors", []),
+        }
+
+        completed_at = datetime.utcnow()
+        update_processing_job(
+            supabase_admin_client,
+            job_id,
+            status="completed" if result["success"] else "failed",
+            progress=100 if result["success"] else 90,
+            message=(
+                f"Stored {result['mappings_inserted']} curriculum mappings"
+                if result["success"]
+                else "Curriculum extraction failed"
+            ),
+            completed_at=completed_at,
+            error="; ".join(result["errors"]) if result["errors"] else None,
+            result={"curriculum_extraction": result},
+        )
+
+        logger.info(
+            "[WORKER][CURRICULUM] Job %s finished: extracted=%s inserted=%s updated=%s skipped=%s",
+            job_id,
+            result["mappings_extracted"],
+            result["mappings_inserted"],
+            result.get("mappings_updated", 0),
+            result.get("mappings_skipped", 0),
+        )
+        return result
+
+    except Exception as exc:
+        logger.error("[WORKER][CURRICULUM] Job %s failed: %s", job_id, exc, exc_info=True)
+        update_processing_job(
+            supabase_admin_client,
+            job_id,
+            status="failed",
+            progress=100,
+            message="Curriculum extraction failed",
+            completed_at=datetime.utcnow(),
+            error=str(exc),
+            result={"curriculum_extraction": {"success": False, "errors": [str(exc)]}},
+        )
+        return {"success": False, "errors": [str(exc)]}
+    finally:
+        try:
+            if pdf_path and os.path.exists(pdf_path):
+                os.remove(pdf_path)
+        except Exception as cleanup_exc:
+            logger.warning("[WORKER][CURRICULUM] Could not clean up %s: %s", pdf_path, cleanup_exc)
 
 
 def process_syllabus_job(
