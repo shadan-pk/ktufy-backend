@@ -52,9 +52,14 @@ class CurriculumExtractor:
                 result["errors"].append("PDF contains no readable text")
                 return result
             
+            # Step 1.5: Preprocess to extract only PROGRAM ELECTIVE sections if text is very large
+            # This focuses the LLM on the relevant sections
+            processed_text = self._preprocess_curriculum_text(raw_text)
+            logger.info(f"[EXTRACTOR] Preprocessed text: {len(processed_text)} characters (from {len(raw_text)})")
+            
             # Step 2: Use LLM to parse curriculum structure
             logger.info("[EXTRACTOR] Step 2: Parsing with LLM")
-            mappings = self._extract_mappings_with_llm(raw_text, branch, regulation)
+            mappings = self._extract_mappings_with_llm(processed_text, branch, regulation)
             logger.info(f"[EXTRACTOR] LLM returned {len(mappings)} mappings")
             
             result["mappings"] = mappings
@@ -69,53 +74,133 @@ class CurriculumExtractor:
         
         return result
     
+    def _preprocess_curriculum_text(self, raw_text: str) -> str:
+        """
+        Preprocess curriculum text to keep the most relevant parts.
+        If text is very large (>50KB), extract sections around PROGRAM ELECTIVE
+        to help the LLM focus on the right content.
+        Otherwise, return the full text.
+        """
+        if len(raw_text) < 50000:
+            # Text is manageable size, use full text
+            return raw_text
+        
+        logger.info(f"[PREPROCESS] PDF is large ({len(raw_text)} chars), extracting relevant sections")
+        
+        # Extract sections containing "PROGRAM ELECTIVE"
+        lines = raw_text.split('\n')
+        relevant_lines = []
+        context_window = 100  # Keep 100 lines before/after each PROGRAM ELECTIVE
+        
+        pec_indices = []
+        for i, line in enumerate(lines):
+            if "PROGRAM ELECTIVE" in line.upper():
+                pec_indices.append(i)
+        
+        logger.info(f"[PREPROCESS] Found {len(pec_indices)} PROGRAM ELECTIVE sections")
+        
+        # Include context around each PROGRAM ELECTIVE section
+        indices_to_include = set()
+        for idx in pec_indices:
+            start = max(0, idx - context_window)
+            end = min(len(lines), idx + context_window)
+            indices_to_include.update(range(start, end))
+        
+        # Also include SEMESTER headers
+        for i, line in enumerate(lines):
+            if line.strip().startswith("SEMESTER"):
+                start = max(0, i - 5)
+                end = min(len(lines), i + context_window)
+                indices_to_include.update(range(start, end))
+        
+        # Sort and extract
+        relevant_lines = [lines[i] for i in sorted(indices_to_include)]
+        processed = '\n'.join(relevant_lines)
+        
+        logger.info(f"[PREPROCESS] Extracted {len(processed)} chars ({len(relevant_lines)} lines) from {len(lines)} total lines")
+        
+        return processed
+    
     def _extract_mappings_with_llm(self, raw_text: str, branch: str, regulation: str) -> List[Dict[str, Any]]:
-        """Use LLM to parse curriculum and extract elective group mappings"""
+        """Use LLM to parse curriculum and extract elective group mappings
+        
+        The curriculum PDF structure:
+        - Each SEMESTER X table contains courses with SLOT (A, B, C, D, E, F, S, T, R/M, H)
+        - SLOT courses = PCC (core courses) - SKIP THESE
+        - Below each semester, there are PROGRAM ELECTIVE I/II/III/IV/V sections
+        - PROGRAM ELECTIVE I under Semester 6 = PEC1 for Semester 6
+        - PROGRAM ELECTIVE II under Semester 7 = PEC2 for Semester 7
+        - Extract only the PROGRAM ELECTIVE courses, not the SLOT courses
+        """
         
         logger.info(f"[LLM_EXTRACT] Starting LLM extraction (text length: {len(raw_text)} chars)")
         
-        prompt = f"""You are a KTU curriculum parser. Extract all subject → elective group mappings from the provided curriculum text.
+        prompt = f"""You are a KTU curriculum parser. Extract ALL program elective course mappings from the provided curriculum.
+
+CRITICAL STRUCTURE UNDERSTANDING:
+Each semester has two parts:
+1. REGULAR COURSES TABLE with columns: SLOT | COURSE NO. | COURSES | ... 
+   - These have SLOT values (A, B, C, D, E, F, S, T, R/M, H)
+   - These are PCC (core) courses - IGNORE THESE
+2. PROGRAM ELECTIVE I/II/III/IV/V sections below the semester table
+   - These are the ELECTIVE OPTIONS for that semester
+   - PROGRAM ELECTIVE I in Sem 6 = PEC1 for Sem 6
+   - PROGRAM ELECTIVE II in Sem 7 = PEC2 for Sem 7
+   - PROGRAM ELECTIVE III in Sem 7 = PEC3 for Sem 7
+   - PROGRAM ELECTIVE IV in Sem 8 = PEC4 for Sem 8
+   - PROGRAM ELECTIVE V in Sem 8 = PEC5 for Sem 8
+
+EXTRACTION INSTRUCTIONS:
+1. Find each SEMESTER (1-8) section
+2. For each semester, find PROGRAM ELECTIVE I/II/III/IV/V subsections
+3. For each program elective section, extract ALL courses listed as options
+4. Map to PEC group based on:
+   - If under "PROGRAM ELECTIVE I" → PEC1
+   - If under "PROGRAM ELECTIVE II" → PEC2
+   - If under "PROGRAM ELECTIVE III" → PEC3
+   - If under "PROGRAM ELECTIVE IV" → PEC4
+   - If under "PROGRAM ELECTIVE V" → PEC5
+5. DO NOT extract courses from the regular SEMESTER table (those have SLOT letters)
 
 BRANCH: {branch}
 REGULATION: {regulation}
 
-CURRICULUM TEXT:
-{raw_text[:8000]}
+FULL CURRICULUM TEXT:
+{raw_text}
 
-Extract every subject and which program elective group it belongs to:
-- PEC1, PEC2, PEC3, PEC4, PEC5 (Program Electives - 5 categories)
-- OEC (Open Electives)
-- MINOR (Minor courses)
-- HONOURS (Honours courses)
-- Other specialty groups
-
-Return ONLY valid JSON array:
+Return ONLY a valid JSON array with NO markdown or code fences:
 [
     {{
-        "subject_code": "CST3E1",
-        "subject_name": "Deep Learning Applications",
+        "subject_code": "CST312",
+        "subject_name": "FOUNDATIONS OF MACHINE LEARNING",
         "program_elective": "PEC1",
         "semester": 6,
         "credits": 3
     }},
     {{
-        "subject_code": "CST3E2",
-        "subject_name": "Natural Language Processing",
+        "subject_code": "CST322",
+        "subject_name": "DATA ANALYTICS",
         "program_elective": "PEC1",
         "semester": 6,
         "credits": 3
     }},
-    ...
+    {{
+        "subject_code": "CST342",
+        "subject_name": "AUTOMATED VERIFICATION",
+        "program_elective": "PEC1",
+        "semester": 6,
+        "credits": 3
+    }}
 ]
 
-CRITICAL RULES:
-1. Include ALL subjects with their subject codes and elective categories
-2. Extract semester information if available
-3. For each subject, determine which elective group (PEC1-5, OEC, etc.) it belongs to
-4. Use consistent subject codes (match the exact code from curriculum)
-5. If a subject belongs to multiple groups, create separate entries
+VALIDATION RULES:
+1. Subject code must NOT be empty
+2. Program elective must be one of: PEC1, PEC2, PEC3, PEC4, PEC5, OEC
+3. Semester must be 1-8
+4. Do NOT include any PCC courses (those are in the main SEMESTER table with SLOT)
+5. Only include courses from PROGRAM ELECTIVE sections
 
-Return ONLY the JSON array. No explanation, no markdown."""
+IMPORTANT: Extract courses from ALL PROGRAM ELECTIVE sections across all semesters. Be thorough."""
 
         try:
             logger.info("[LLM_EXTRACT] Calling LLM...")
@@ -131,19 +216,47 @@ Return ONLY the JSON array. No explanation, no markdown."""
             
             logger.info(f"[LLM_EXTRACT] Processing {len(mappings)} mappings for validation")
             
+            # Valid program elective values (skip PCC courses)
+            valid_pec_values = {"PEC1", "PEC2", "PEC3", "PEC4", "PEC5", "OEC", "MINOR", "HONOURS"}
+            
             # Validate and clean mappings
             validated = []
-            for i, m in enumerate(mappings):
-                if isinstance(m, dict) and m.get("subject_code") and m.get("program_elective"):
-                    validated.append({
-                        "subject_code": str(m.get("subject_code")).strip().upper(),
-                        "subject_name": str(m.get("subject_name", "")).strip(),
-                        "program_elective": str(m.get("program_elective")).strip(),
-                        "semester": int(m.get("semester", 0)) if m.get("semester") else None,
-                        "credits": int(m.get("credits", 0)) if m.get("credits") else None,
-                    })
+            skipped_count = 0
             
-            logger.info(f"[LLM_EXTRACT] Validated {len(validated)} mappings from LLM response")
+            for i, m in enumerate(mappings):
+                if not isinstance(m, dict):
+                    skipped_count += 1
+                    continue
+                
+                subject_code = str(m.get("subject_code", "")).strip().upper()
+                program_elective = str(m.get("program_elective", "")).strip().upper()
+                
+                # Skip if missing required fields
+                if not subject_code or not program_elective:
+                    logger.debug(f"[LLM_EXTRACT] Skipping {i}: missing code or elective")
+                    skipped_count += 1
+                    continue
+                
+                # Skip if not a valid elective (i.e., it's PCC)
+                if program_elective not in valid_pec_values:
+                    logger.debug(f"[LLM_EXTRACT] Skipping {subject_code}: invalid program_elective '{program_elective}' (appears to be PCC)")
+                    skipped_count += 1
+                    continue
+                
+                # Valid elective - add to validated list
+                validated.append({
+                    "subject_code": subject_code,
+                    "subject_name": str(m.get("subject_name", "")).strip(),
+                    "program_elective": program_elective,
+                    "semester": int(m.get("semester", 0)) if m.get("semester") else None,
+                    "credits": int(m.get("credits", 0)) if m.get("credits") else None,
+                })
+            
+            logger.info(f"[LLM_EXTRACT] Validated {len(validated)} mappings (skipped {skipped_count} PCC or invalid courses)")
+            
+            if validated:
+                logger.info(f"[LLM_EXTRACT] Sample validated courses: {[v['subject_code'] + '→' + v['program_elective'] for v in validated[:5]]}")
+            
             return validated
             
         except Exception as e:
