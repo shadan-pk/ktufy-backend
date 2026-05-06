@@ -251,6 +251,15 @@ class SyllabusDBService:
             query = query.order("semester").order("code")
             result = query.execute()
 
+            # Fetch all elective mappings for this regulation to avoid N+1 queries
+            elective_mappings = {}
+            try:
+                map_res = client.table("syllabus_elective_mappings").select("subject_code, program_elective").eq("regulation", regulation or "2019").execute()
+                for m in map_res.data:
+                    elective_mappings[m["subject_code"]] = m["program_elective"]
+            except Exception as e:
+                logger.warning(f"Failed to fetch elective mappings: {e}")
+
             subjects = []
             for row in result.data:
                 # Get module count for this subject
@@ -262,6 +271,11 @@ class SyllabusDBService:
                     .execute()
                 )
                 row["module_count"] = mod_result.count if mod_result.count is not None else len(mod_result.data)
+                
+                # Dynamic resolution of program_elective if missing
+                if not row.get("program_elective"):
+                    row["program_elective"] = elective_mappings.get(row["code"])
+                        
                 subjects.append(row)
 
             return subjects
@@ -304,6 +318,15 @@ class SyllabusDBService:
                 return None
 
             subject = result.data[0]
+
+            # Dynamic resolution of program_elective if missing
+            if (not subject.get("program_elective")) and (subject.get("category") == "PEC" or subject.get("category") == "OEC"):
+                try:
+                    mapping = client.table("syllabus_elective_mappings").select("program_elective").eq("subject_code", subject["code"]).eq("regulation", subject.get("regulation", "2019")).execute()
+                    if mapping.data:
+                        subject["program_elective"] = mapping.data[0]["program_elective"]
+                except Exception:
+                    pass
 
             # Fetch modules
             mod_result = (
