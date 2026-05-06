@@ -245,9 +245,15 @@ class SyllabusDBService:
             # Fetch all elective mappings for this regulation to avoid N+1 queries
             elective_mappings = {}
             try:
-                map_res = client.table("syllabus_elective_mappings").select("subject_code, program_elective").eq("regulation", regulation or "2019").execute()
+                reg_val = regulation or "2019"
+                map_res = client.table("syllabus_elective_mappings").select("subject_code, program_elective").eq("regulation", reg_val).execute()
                 for m in map_res.data:
-                    elective_mappings[m["subject_code"]] = m["program_elective"]
+                    # Store as uppercase for case-insensitive matching
+                    elective_mappings[m["subject_code"].upper()] = m["program_elective"]
+                logger.info(f"📚 [Syllabus] Loaded {len(elective_mappings)} elective mappings from DB for regulation {reg_val}")
+                if elective_mappings:
+                    sample = dict(list(elective_mappings.items())[:5])
+                    logger.info(f"📚 [Syllabus] Sample Mappings: {sample}")
             except Exception as e:
                 logger.warning(f"Failed to fetch elective mappings: {e}")
 
@@ -258,7 +264,7 @@ class SyllabusDBService:
                 row["module_count"] = mod_result.count if mod_result.count is not None else 0
                 
                 # Dynamic resolution from syllabus_elective_mappings
-                mapping = elective_mappings.get(row["code"])
+                mapping = elective_mappings.get(row["code"].upper())
                 if mapping:
                     row["program_elective"] = mapping
                     # Override category for granular grouping (e.g. PEC -> PEC1)
@@ -312,11 +318,18 @@ class SyllabusDBService:
             # Dynamic resolution of program_elective and category
             if subject.get("category") == "PEC" or subject.get("category") == "OEC":
                 try:
-                    mapping = client.table("syllabus_elective_mappings").select("program_elective").eq("subject_code", subject["code"]).eq("regulation", subject.get("regulation", "2019")).execute()
-                    if mapping.data:
+                    code_upper = subject["code"].upper()
+                    mapping = client.table("syllabus_elective_mappings").select("program_elective").eq("subject_code", code_upper).eq("regulation", subject.get("regulation", "2019")).execute()
+                    if not mapping.data:
+                        # Try case-insensitive fallback if direct eq fails
+                        all_maps = client.table("syllabus_elective_mappings").select("subject_code, program_elective").execute()
+                        match = next((m for m in all_maps.data if m["subject_code"].upper() == code_upper), None)
+                        if match:
+                            subject["program_elective"] = match["program_elective"]
+                            subject["category"] = match["program_elective"]
+                    elif mapping.data:
                         val = mapping.data[0]["program_elective"]
                         subject["program_elective"] = val
-                        # Update category for consistent labeling in UI
                         subject["category"] = val
                 except Exception:
                     pass
