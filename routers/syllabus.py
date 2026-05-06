@@ -171,6 +171,7 @@ async def get_subjects(
                 credits=s.get("credits"),
                 semester=s.get("semester"),
                 module_count=s.get("module_count", 0),
+                category=s.get("category"),
             ))
         return items
 
