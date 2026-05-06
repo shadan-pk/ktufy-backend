@@ -35,6 +35,7 @@ class SubjectListItem(BaseModel):
     credits: Optional[int] = Field(None, description="Credit hours")
     semester: Optional[int] = Field(None, description="Semester number")
     module_count: int = Field(0, description="Number of modules")
+    category: Optional[str] = Field(None, description="Subject category (e.g. PCC, PEC, OEC)")
 
 
 class SubjectDetail(BaseModel):
@@ -44,6 +45,7 @@ class SubjectDetail(BaseModel):
     credits: Optional[int] = Field(None, description="Credit hours")
     semester: Optional[int] = Field(None, description="Semester number")
     branch: Optional[str] = Field(None, description="Branch code")
+    category: Optional[str] = Field(None, description="Subject category (e.g. PCC, PEC, OEC)")
     modules: List[ModuleItem] = Field(default_factory=list, description="Modules in this subject")
     course_outcomes: List[str] = Field(default_factory=list, description="Course outcomes (COs)")
     textbooks: List[str] = Field(default_factory=list, description="Recommended textbooks")

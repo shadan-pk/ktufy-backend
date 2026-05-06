@@ -142,6 +142,7 @@ async def get_subjects(
                     credits=s.get("credits"),
                     semester=s.get("semester"),
                     module_count=s.get("module_count", 0),
+                    category=s.get("category"),
                 )
                 for s in subjects_db
             ]
@@ -222,6 +223,7 @@ async def get_subject_detail(
                 credits=subject.get("credits"),
                 semester=subject.get("semester"),
                 branch=subject.get("branch"),
+                category=subject.get("category"),
                 modules=modules,
                 course_outcomes=course_outcomes or [],
                 textbooks=textbooks or [],
@@ -283,6 +285,7 @@ async def get_subject_detail(
             credits=subject.get("credits"),
             semester=subject.get("semester"),
             branch=subject.get("branch"),
+            category=subject.get("category"),
             modules=modules,
             course_outcomes=course_outcomes or [],
             textbooks=textbooks or [],
