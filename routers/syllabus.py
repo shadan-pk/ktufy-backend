@@ -143,7 +143,7 @@ async def get_subjects(
                     semester=s.get("semester"),
                     module_count=s.get("module_count", 0),
                     category=s.get("category"),
-                    program_elective=s.get("program_elective"),
+                    program_elective=s.get("program_elective") or "",
                 )
                 for s in subjects_db
             ]
@@ -173,6 +173,7 @@ async def get_subjects(
                 semester=s.get("semester"),
                 module_count=s.get("module_count", 0),
                 category=s.get("category"),
+                program_elective=s.get("program_elective", ""),
             ))
         return items
 
@@ -226,7 +227,7 @@ async def get_subject_detail(
                 semester=subject.get("semester"),
                 branch=subject.get("branch"),
                 category=subject.get("category"),
-                program_elective=subject.get("program_elective"),
+                program_elective=subject.get("program_elective") or "",
                 modules=modules,
                 course_outcomes=course_outcomes or [],
                 textbooks=textbooks or [],
@@ -289,6 +290,7 @@ async def get_subject_detail(
             semester=subject.get("semester"),
             branch=subject.get("branch"),
             category=subject.get("category"),
+            program_elective=subject.get("program_elective", ""),
             modules=modules,
             course_outcomes=course_outcomes or [],
             textbooks=textbooks or [],
